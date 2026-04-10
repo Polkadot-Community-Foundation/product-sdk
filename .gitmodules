@@ -40,3 +40,9 @@
 [submodule "repos/w3s-conference-app"]
 	path = repos/w3s-conference-app
 	url = git@github.com:paritytech/w3s-conference-app.git
+[submodule "repos/truapi-explorer"]
+	path = repos/truapi-explorer
+	url = git@github.com:paritytech/truapi-explorer.git
+[submodule "repos/host-sdk"]
+	path = repos/host-sdk
+	url = git@github.com:paritytech/host-sdk.git
