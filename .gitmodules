@@ -46,3 +46,6 @@
 [submodule "repos/host-sdk"]
 	path = repos/host-sdk
 	url = git@github.com:paritytech/host-sdk.git
+[submodule "repos/host-playground"]
+	path = repos/host-playground
+	url = git@github.com:paritytech/host-playground.git
