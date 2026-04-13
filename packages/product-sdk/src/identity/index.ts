@@ -1,13 +1,34 @@
 /**
  * @parity/product-sdk/identity
  *
- * Identity and DotNS utilities.
- * Provides product-scoped identity derivation and name resolution.
+ * Identity utilities including DotNS name resolution,
+ * product account derivation, and Ring VRF anonymous aliases.
  */
 
-// TODO: Implement identity utilities
-// - DotNS name resolution
-// - Product account derivation
-// - Identity verification
+// DotNS utilities
+export {
+  isValidDotNsName,
+  normalizeDotNsName,
+  resolveDotNs,
+  reverseDotNs,
+  isDotNsAvailable,
+} from './dotns.js';
 
-export {};
+// Product account utilities
+export {
+  deriveProductAccount,
+  verifyProductAccount,
+  deriveAnonymousAlias,
+  createRingProof,
+  verifyRingProof,
+} from './product-account.js';
+
+// Types
+export type {
+  DotNsRecord,
+  ProductAccountInfo,
+  AnonymousAliasInfo,
+  RingLocation,
+  VerificationResult,
+  OnChainIdentity,
+} from './types.js';
