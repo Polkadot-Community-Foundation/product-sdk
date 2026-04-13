@@ -14,8 +14,8 @@
 
 import { gcm } from '@noble/ciphers/aes';
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
-import { x25519 } from '@noble/ciphers/webcrypto';
 import { randomBytes } from '@noble/ciphers/webcrypto';
+import { x25519 } from '@noble/curves/ed25519';
 import type {
   EncryptedData,
   EncryptedBuffer,
@@ -42,9 +42,9 @@ export function generateKey(length: number = 32): Uint8Array {
  *
  * @returns Key pair with public and private keys
  */
-export async function generateKeyPair(): Promise<KeyPair> {
+export function generateKeyPair(): KeyPair {
   const privateKey = randomBytes(32);
-  const publicKey = await x25519.getPublicKey(privateKey);
+  const publicKey = x25519.getPublicKey(privateKey);
   return { publicKey, privateKey };
 }
 
@@ -175,22 +175,22 @@ export function decryptFromBuffer(
  * @example
  * ```ts
  * // Sender
- * const encrypted = await encryptForRecipient(data, recipientPublicKey);
+ * const encrypted = encryptForRecipient(data, recipientPublicKey);
  *
  * // Recipient
- * const decrypted = await decryptFromSender(encrypted, recipientPrivateKey);
+ * const decrypted = decryptFromSender(encrypted, recipientPrivateKey);
  * ```
  */
-export async function encryptForRecipient(
+export function encryptForRecipient(
   plaintext: Uint8Array,
   recipientPublicKey: Uint8Array,
   algorithm: SymmetricAlgorithm = 'aes-256-gcm'
-): Promise<EncryptedBuffer> {
+): EncryptedBuffer {
   // Generate ephemeral key pair
-  const ephemeral = await generateKeyPair();
+  const ephemeral = generateKeyPair();
 
   // Derive shared secret via X25519
-  const sharedSecret = await x25519.getSharedSecret(
+  const sharedSecret = x25519.getSharedSecret(
     ephemeral.privateKey,
     recipientPublicKey
   );
@@ -215,11 +215,11 @@ export async function encryptForRecipient(
  * @param algorithm - Symmetric algorithm used for encryption
  * @returns Decrypted plaintext
  */
-export async function decryptFromSender(
+export function decryptFromSender(
   buffer: EncryptedBuffer,
   recipientPrivateKey: Uint8Array,
   algorithm: SymmetricAlgorithm = 'aes-256-gcm'
-): Promise<Uint8Array> {
+): Uint8Array {
   const nonceSize =
     algorithm === 'xchacha20-poly1305' ? XCHACHA_NONCE_SIZE : AES_GCM_NONCE_SIZE;
 
@@ -229,7 +229,7 @@ export async function decryptFromSender(
   const ciphertext = buffer.slice(32 + nonceSize);
 
   // Derive shared secret
-  const sharedSecret = await x25519.getSharedSecret(
+  const sharedSecret = x25519.getSharedSecret(
     recipientPrivateKey,
     ephemeralPublicKey
   );

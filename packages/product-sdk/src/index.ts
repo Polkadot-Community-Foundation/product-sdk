@@ -24,6 +24,7 @@
 
 // Core exports
 export { createApp } from './core/createApp.js';
+export { configure, createLogger } from './core/logger.js';
 export type {
   App,
   AppConfig,
@@ -35,3 +36,7 @@ export type {
   Account,
   ChainDescriptor,
 } from './core/types.js';
+export type { LogEntry, LogHandler, LoggerConfig, Logger } from './core/logger.js';
+
+// Chain descriptors
+export { chains } from './chain/chains.js';
