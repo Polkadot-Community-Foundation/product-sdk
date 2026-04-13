@@ -5,10 +5,17 @@
  * Supports ink! contracts on Asset Hub and other parachains.
  */
 
-// TODO: Implement contract utilities
-// - Contract instantiation
-// - Message encoding/decoding
-// - Dry-run support
-// - Event parsing
-
-export {};
+export { Contract } from './contract.js';
+export type {
+  ContractMetadata,
+  ContractMessage,
+  ContractConstructor,
+  ContractEventDef,
+  ContractArg,
+  ContractType,
+  CallOptions,
+  CallResult,
+  DryRunResult,
+  ContractEvent,
+  DeployResult,
+} from './types.js';

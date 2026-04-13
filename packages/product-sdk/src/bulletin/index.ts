@@ -2,13 +2,25 @@
  * @parity/product-sdk/bulletin
  *
  * Bulletin Chain integration for decentralized data storage.
- * Wraps @bulletin/sdk for now, may implement directly later.
+ * Provides CID computation, data upload, and fetch functionality.
+ *
+ * Credit: Based on polkadot-apps/packages/bulletin
  */
 
-// TODO: Implement bulletin utilities
-// - Upload data to Bulletin Chain
-// - Fetch data by CID
-// - CID computation
-// - Wrap @bulletin/sdk
+// Client
+export { BulletinClient, getGateway, gatewayUrl } from './client.js';
 
-export {};
+// CID utilities
+export { computeCid, cidToPreimageKey, computeCidFromString } from './cid.js';
+
+// Types
+export type {
+  Environment,
+  UploadOptions,
+  UploadResult,
+  UploadProgress,
+  FetchOptions,
+  BatchUploadItem,
+  BatchUploadResult,
+  BatchUploadOptions,
+} from './types.js';
