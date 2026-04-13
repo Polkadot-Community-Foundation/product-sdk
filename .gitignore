@@ -27,3 +27,6 @@ coverage/
 # Package manager locks
 package-lock.json
 yarn.lock
+
+#local docs
+local-docs

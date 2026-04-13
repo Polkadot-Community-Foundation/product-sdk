@@ -1,7 +1,7 @@
 /**
  * Encryption utilities
  *
- * Patterns extracted from:
+ * Credit: Patterns extracted from polkadot-apps and multiple Parity products:
  * - s3al: X25519 + XSalsa20-Poly1305 (TweetNaCl)
  * - sourc3s: X25519 + AES-GCM (Web Crypto)
  * - mark3t: AES-256-GCM (Web Crypto)

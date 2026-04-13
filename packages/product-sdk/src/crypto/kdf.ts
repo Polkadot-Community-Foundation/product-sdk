@@ -1,7 +1,7 @@
 /**
  * Key Derivation Functions
  *
- * Patterns extracted from:
+ * Credit: Patterns extracted from polkadot-apps and multiple Parity products:
  * - s3al: PBKDF2 for passphrase protection
  * - sourc3s: HKDF for context-specific keys
  * - ja3x: Scrypt + HKDF for key derivation

@@ -1,7 +1,7 @@
 /**
  * Hashing utilities
  *
- * Patterns extracted from:
+ * Credit: Patterns extracted from polkadot-apps and multiple Parity products:
  * - bulletin-deploy: Blake2b-256 for CIDs
  * - mark3t: Blake2b-256 for CIDs
  * - sourc3s: SHA-256 for nullifiers

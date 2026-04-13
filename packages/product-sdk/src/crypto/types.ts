@@ -1,5 +1,7 @@
 /**
- * Common types for @parity/crypto
+ * Types for @parity/product-sdk/crypto
+ *
+ * Credit: Based on patterns from polkadot-apps and analysis of 8+ Parity products
  */
 
 /** Encrypted data with nonce/IV prepended */

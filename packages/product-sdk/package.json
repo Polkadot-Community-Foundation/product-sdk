@@ -1,0 +1,94 @@
+{
+  "name": "@parity/product-sdk",
+  "version": "0.0.1",
+  "description": "Unified SDK for building products in the Polkadot ecosystem",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react/index.js",
+      "types": "./dist/react/index.d.ts"
+    },
+    "./crypto": {
+      "import": "./dist/crypto/index.js",
+      "types": "./dist/crypto/index.d.ts"
+    },
+    "./address": {
+      "import": "./dist/address/index.js",
+      "types": "./dist/address/index.d.ts"
+    },
+    "./contracts": {
+      "import": "./dist/contracts/index.js",
+      "types": "./dist/contracts/index.d.ts"
+    },
+    "./chain": {
+      "import": "./dist/chain/index.js",
+      "types": "./dist/chain/index.d.ts"
+    },
+    "./wallet": {
+      "import": "./dist/wallet/index.js",
+      "types": "./dist/wallet/index.d.ts"
+    },
+    "./storage": {
+      "import": "./dist/storage/index.js",
+      "types": "./dist/storage/index.d.ts"
+    },
+    "./bulletin": {
+      "import": "./dist/bulletin/index.js",
+      "types": "./dist/bulletin/index.d.ts"
+    },
+    "./identity": {
+      "import": "./dist/identity/index.js",
+      "types": "./dist/identity/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@noble/ciphers": "^1.2.1",
+    "@noble/hashes": "^1.7.1"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.0.0",
+    "react": "^18.0.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "polkadot",
+    "parity",
+    "sdk",
+    "blockchain",
+    "web3"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/parity/product-sdk"
+  }
+}
