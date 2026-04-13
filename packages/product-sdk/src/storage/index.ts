@@ -3,12 +3,9 @@
  *
  * Key-value storage utilities.
  * Uses localStorage in standalone mode, TruAPI hostLocalStorage in container mode.
+ *
+ * Credit: Based on polkadot-apps/packages/storage
  */
 
-// TODO: Implement storage utilities
-// - Key-value storage interface
-// - JSON serialization helpers
-// - Namespace isolation per app
-// - TruAPI bridge for container mode
-
-export {};
+export { createKvStore } from './kv-store.js';
+export type { KvStore, KvStoreOptions, HostLocalStorage } from './types.js';

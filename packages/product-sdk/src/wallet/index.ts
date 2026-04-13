@@ -3,13 +3,20 @@
  *
  * Wallet connection and signing utilities.
  * Supports both container mode (TruAPI) and standalone mode (browser extensions).
+ *
+ * Credit: Based on polkadot-apps/packages/signer
  */
 
-// TODO: Implement wallet utilities
-// - Wallet connection (extension detection, TruAPI bridge)
-// - Account management
-// - Message signing
-// - Product account derivation (container mode)
-// - Ring VRF anonymous aliases (container mode)
-
-export {};
+export { WalletManager } from './wallet.js';
+export type { WalletSubscriber, Unsubscribe } from './wallet.js';
+export type {
+  ConnectionStatus,
+  ProviderType,
+  WalletAccount,
+  WalletState,
+  WalletError,
+  WalletErrorType,
+  WalletOptions,
+  ProductAccount,
+  RingLocation,
+} from './types.js';
