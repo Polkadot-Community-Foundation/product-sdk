@@ -5,6 +5,12 @@
  */
 
 import { createLogger } from '../core/logger.js';
+import {
+  isInsideContainer,
+  getAccountsProvider,
+  type AccountsProvider,
+  type TruApiAccount,
+} from '../chain/container.js';
 import type {
   WalletState,
   WalletAccount,
@@ -47,6 +53,8 @@ export class WalletManager {
   private state: WalletState;
   private subscribers = new Set<WalletSubscriber>();
   private options: Required<WalletOptions>;
+  private accountsProvider: AccountsProvider | null = null;
+  private accountsUnsubscribe: (() => void) | null = null;
 
   constructor(options?: WalletOptions) {
     this.options = {
@@ -106,15 +114,162 @@ export class WalletManager {
     log.info('Connecting to wallet providers');
     this.setState({ status: 'connecting', error: null });
 
-    // TODO: Implement provider detection and connection
-    // 1. Check if inside container (TruAPI available)
-    // 2. If yes, connect to host provider
-    // 3. If no, connect to browser extension
+    try {
+      // Check if inside container (TruAPI available)
+      const inContainer = await isInsideContainer();
 
-    throw new Error(
-      'WalletManager.connect() is not yet implemented. ' +
-        'This is a skeleton for the Product SDK structure.'
-    );
+      if (inContainer) {
+        log.debug('Container mode detected, using host accounts provider');
+        return await this.connectToHost();
+      }
+
+      // In standalone mode, connect to browser extension
+      log.debug('Standalone mode, connecting to browser extension');
+      return await this.connectToExtension();
+    } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
+      log.error('Failed to connect to wallet', { error: errorMessage });
+      this.setState({
+        status: 'disconnected',
+        error: {
+          type: 'EXTENSION_NOT_FOUND',
+          message: errorMessage,
+          cause: e,
+        },
+      });
+      throw e;
+    }
+  }
+
+  /**
+   * Connect to host accounts provider (container mode)
+   */
+  private async connectToHost(): Promise<{ accounts: WalletAccount[] }> {
+    const provider = await getAccountsProvider();
+    if (!provider) {
+      throw new Error('Host accounts provider not available');
+    }
+
+    this.accountsProvider = provider;
+
+    // Get initial accounts
+    const truApiAccounts = await provider.getAccounts();
+    const accounts = this.truApiAccountsToWallet(truApiAccounts);
+
+    // Subscribe to account changes
+    this.accountsUnsubscribe = provider.onAccountsChange((newAccounts) => {
+      const walletAccounts = this.truApiAccountsToWallet(newAccounts);
+      log.debug('Host accounts changed', { count: walletAccounts.length });
+      this.setState({ accounts: walletAccounts });
+
+      // Update selected account if it's no longer available
+      if (this.state.selectedAccount) {
+        const stillExists = walletAccounts.some(
+          (a) => a.address === this.state.selectedAccount?.address
+        );
+        if (!stillExists) {
+          this.setState({ selectedAccount: walletAccounts[0] ?? null });
+        }
+      }
+    });
+
+    log.info('Connected to host accounts provider', { count: accounts.length });
+    this.setState({
+      status: 'connected',
+      accounts,
+      activeProvider: 'host',
+      selectedAccount: accounts[0] ?? null,
+    });
+
+    return { accounts };
+  }
+
+  /**
+   * Connect to browser extension (standalone mode)
+   */
+  private async connectToExtension(): Promise<{ accounts: WalletAccount[] }> {
+    // Check for injected web3 providers
+    const win = globalThis.window as unknown as Record<string, unknown>;
+    const injectedWeb3 = win?.injectedWeb3 as
+      | Record<string, { enable?: (appName: string) => Promise<unknown> }>
+      | undefined;
+
+    if (!injectedWeb3) {
+      throw new Error(
+        'No wallet extension detected. Please install a Polkadot-compatible wallet extension.'
+      );
+    }
+
+    const extensionNames = Object.keys(injectedWeb3);
+    if (extensionNames.length === 0) {
+      throw new Error('No wallet extensions available');
+    }
+
+    log.debug('Found wallet extensions', { extensions: extensionNames });
+
+    // Try to enable the first available extension
+    const allAccounts: WalletAccount[] = [];
+
+    for (const name of extensionNames) {
+      const extension = injectedWeb3[name];
+      if (!extension?.enable) continue;
+
+      try {
+        const enabled = (await Promise.race([
+          extension.enable(this.options.appName),
+          new Promise((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Extension timeout')),
+              this.options.extensionTimeout
+            )
+          ),
+        ])) as { accounts?: { get?: () => Promise<unknown[]> } };
+
+        if (enabled?.accounts?.get) {
+          const extensionAccounts = (await enabled.accounts.get()) as Array<{
+            address: string;
+            name?: string;
+          }>;
+
+          for (const acc of extensionAccounts) {
+            allAccounts.push({
+              address: acc.address,
+              name: acc.name ?? null,
+              source: 'extension' as const,
+            });
+          }
+          log.debug('Enabled extension', { name, accounts: extensionAccounts.length });
+        }
+      } catch (e) {
+        log.warn('Failed to enable extension', { name, error: e });
+      }
+    }
+
+    if (allAccounts.length === 0) {
+      throw new Error('No accounts available from wallet extensions');
+    }
+
+    log.info('Connected to browser extension', { count: allAccounts.length });
+    this.setState({
+      status: 'connected',
+      accounts: allAccounts,
+      activeProvider: 'extension',
+      selectedAccount: allAccounts[0] ?? null,
+    });
+
+    return { accounts: allAccounts };
+  }
+
+  /**
+   * Convert TruAPI accounts to WalletAccount format
+   */
+  private truApiAccountsToWallet(accounts: TruApiAccount[]): WalletAccount[] {
+    return accounts.map((a) => ({
+      address: a.address,
+      name: a.name ?? null,
+      publicKey: a.publicKey,
+      source: 'host' as const,
+    }));
   }
 
   /**
@@ -122,6 +277,14 @@ export class WalletManager {
    */
   async disconnect(): Promise<void> {
     log.info('Disconnecting from wallet');
+
+    // Clean up accounts provider subscription
+    if (this.accountsUnsubscribe) {
+      this.accountsUnsubscribe();
+      this.accountsUnsubscribe = null;
+    }
+    this.accountsProvider = null;
+
     this.setState({
       status: 'disconnected',
       accounts: [],
@@ -166,12 +329,19 @@ export class WalletManager {
       throw new Error('No account selected');
     }
 
-    log.debug('Signing message', { address: account.address });
+    const bytes = typeof message === 'string' ? new TextEncoder().encode(message) : message;
+    log.debug('Signing message', { address: account.address, size: bytes.length });
 
-    // TODO: Implement message signing via the signer
+    // In container mode, use the host accounts provider
+    if (this.accountsProvider) {
+      return this.accountsProvider.sign(account.address, bytes);
+    }
+
+    // In standalone mode, use extension signing
+    // This requires the signer to be available from the extension
     throw new Error(
-      'WalletManager.signMessage() is not yet implemented. ' +
-        'This is a skeleton for the Product SDK structure.'
+      'Extension-based signing not yet implemented. ' +
+        'This requires additional integration with the wallet extension signer.'
     );
   }
 
@@ -207,6 +377,14 @@ export class WalletManager {
    */
   destroy(): void {
     log.debug('Destroying WalletManager');
+
+    // Clean up accounts provider subscription
+    if (this.accountsUnsubscribe) {
+      this.accountsUnsubscribe();
+      this.accountsUnsubscribe = null;
+    }
+    this.accountsProvider = null;
+
     this.subscribers.clear();
     this.setState({
       status: 'disconnected',

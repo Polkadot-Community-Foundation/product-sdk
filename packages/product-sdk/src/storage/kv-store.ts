@@ -5,6 +5,7 @@
  */
 
 import { createLogger } from '../core/logger.js';
+import { isInsideContainer, getHostLocalStorage } from '../chain/container.js';
 import type { KvStore, KvStoreOptions, HostLocalStorage } from './types.js';
 
 const log = createLogger('storage');
@@ -166,16 +167,19 @@ export async function createKvStore(options?: KvStoreOptions): Promise<KvStore> 
 
   // Explicit host storage takes precedence
   if (options?.hostLocalStorage) {
+    log.debug('Using explicit host storage backend');
     return createHostBackend(options.hostLocalStorage, applyPrefix);
   }
 
-  // TODO: Auto-detect container environment when TruAPI is implemented
-  // if (await isInsideContainer()) {
-  //   const hostStorage = await getHostLocalStorage();
-  //   if (hostStorage) {
-  //     return createHostBackend(hostStorage, applyPrefix);
-  //   }
-  // }
+  // Auto-detect container environment
+  if (await isInsideContainer()) {
+    const hostStorage = await getHostLocalStorage();
+    if (hostStorage) {
+      log.debug('Using auto-detected host storage backend');
+      return createHostBackend(hostStorage, applyPrefix);
+    }
+  }
 
+  log.debug('Using localStorage backend');
   return createLocalStorageBackend(applyPrefix);
 }

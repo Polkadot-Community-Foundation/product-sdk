@@ -2,10 +2,10 @@
  * ProductSDKProvider component
  */
 
-import React, { useMemo, type ReactNode } from 'react';
+import React, { useEffect, useState, type ReactNode } from 'react';
 import { ProductSDKContext } from './context.js';
 import { createApp } from '../core/createApp.js';
-import type { LogLevel } from '../core/types.js';
+import type { App, LogLevel } from '../core/types.js';
 
 /** Props for ProductSDKProvider */
 export interface ProductSDKProviderProps {
@@ -15,6 +15,8 @@ export interface ProductSDKProviderProps {
   logLevel?: LogLevel;
   /** Child components */
   children: ReactNode;
+  /** Fallback to show while loading */
+  fallback?: ReactNode;
 }
 
 /**
@@ -26,7 +28,7 @@ export interface ProductSDKProviderProps {
  *
  * function App() {
  *   return (
- *     <ProductSDKProvider name="my-app">
+ *     <ProductSDKProvider name="my-app" fallback={<Loading />}>
  *       <MyApp />
  *     </ProductSDKProvider>
  *   );
@@ -37,10 +39,38 @@ export function ProductSDKProvider({
   name,
   logLevel = 'info',
   children,
+  fallback = null,
 }: ProductSDKProviderProps) {
-  const app = useMemo(() => {
-    return createApp({ name, logLevel });
+  const [app, setApp] = useState<App | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+
+    createApp({ name, logLevel })
+      .then((createdApp) => {
+        if (mounted) {
+          setApp(createdApp);
+        }
+      })
+      .catch((e) => {
+        if (mounted) {
+          setError(e instanceof Error ? e : new Error(String(e)));
+        }
+      });
+
+    return () => {
+      mounted = false;
+    };
   }, [name, logLevel]);
+
+  if (error) {
+    throw error;
+  }
+
+  if (!app) {
+    return <>{fallback}</>;
+  }
 
   return (
     <ProductSDKContext.Provider value={app}>

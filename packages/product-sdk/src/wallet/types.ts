@@ -18,16 +18,16 @@ export type ProviderType = 'host' | 'extension' | 'dev';
 export interface WalletAccount {
   /** SS58 address (generic prefix 42 by default) */
   address: string;
-  /** H160 EVM address derived from the public key */
-  h160Address: `0x${string}`;
-  /** Raw public key (32 bytes) */
-  publicKey: Uint8Array;
+  /** H160 EVM address derived from the public key (optional) */
+  h160Address?: `0x${string}`;
+  /** Raw public key (32 bytes) (optional) */
+  publicKey?: Uint8Array;
   /** Human-readable name if available */
   name: string | null;
   /** Which provider supplied this account */
   source: ProviderType;
-  /** Get the PolkadotSigner for this account */
-  getSigner(): PolkadotSigner;
+  /** Get the PolkadotSigner for this account (optional - not available for all providers) */
+  getSigner?: () => PolkadotSigner;
 }
 
 /**
