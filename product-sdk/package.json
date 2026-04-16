@@ -1,9 +1,8 @@
 {
-  "name": "product-sdk-prototype",
+  "name": "@parity/product-sdk-monorepo",
   "version": "0.0.1",
   "private": true,
-  "description": "Prototype repository for Polkadot Product SDK development",
-  "type": "module",
+  "description": "Monorepo for @parity/product-sdk packages",
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
@@ -14,7 +13,7 @@
     "typescript": "^5.7.0"
   },
   "engines": {
-    "node": ">=20.0.0"
-  },
-  "packageManager": "pnpm@9.15.4"
+    "node": ">=20",
+    "pnpm": ">=9"
+  }
 }

@@ -92,6 +92,27 @@ function MyApp() {
 }
 ```
 
+## Architecture Decision: Wrapping @novasamatech/product-sdk
+
+**Decision**: `@parity/product-sdk` should re-export and wrap `@novasamatech/product-sdk` rather than reimplementing container integration from scratch.
+
+**Rationale**:
+- `@novasamatech/product-sdk` is the official SDK used by polkadot-web host
+- It provides tested, working container integration (sandbox provider, spektr wallet injection)
+- Reimplementing would create compatibility issues with the host
+
+**What we wrap/re-export**:
+- `injectSpektrExtension()` — Injects spektr wallet into `window.injectedWeb3`
+- `createPapiProvider(genesisHash)` — Creates PAPI-compatible chain provider via TruAPI
+- `sandboxProvider` — Container detection and chain operations
+- `hostLocalStorage` — Host-provided localStorage
+
+**What we add**:
+- Unified `createApp()` API for simpler initialization
+- Additional utilities (address conversion, crypto, bulletin helpers)
+- React hooks and providers
+- TypeScript types and documentation
+
 ## Container vs Standalone Mode
 
 The SDK automatically detects the runtime environment:
