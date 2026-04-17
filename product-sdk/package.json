@@ -10,6 +10,7 @@
     "clean": "pnpm -r clean"
   },
   "devDependencies": {
+    "tsup": "^8.4.0",
     "typescript": "^5.7.0"
   },
   "engines": {

@@ -22,7 +22,7 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsup",
     "test": "vitest",
     "test:run": "vitest run",
     "lint": "eslint src/",
