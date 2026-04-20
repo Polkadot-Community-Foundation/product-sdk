@@ -49,7 +49,9 @@ export async function checkAuthorization(
     let auth;
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        auth = await (api as any).query.TransactionStorage.Authorizations.getValue(Enum("Account", address));
+        auth = await (api as any).query.TransactionStorage.Authorizations.getValue(
+            Enum("Account", address),
+        );
     } catch (error) {
         log.error("checkAuthorization: query failed", { address, error });
         throw new Error(`Failed to check authorization for ${address}`, { cause: error });

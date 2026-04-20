@@ -23,20 +23,20 @@
  */
 
 // Core exports
-export { createApp } from './core/createApp.js';
-export { configure, createLogger } from './core/logger.js';
+export { createApp } from "./core/createApp.js";
+export { configure, createLogger } from "./core/logger.js";
 export type {
-  App,
-  AppConfig,
-  LogLevel,
-  WalletApi,
-  StorageApi,
-  ChainApi,
-  BulletinApi,
-  Account,
-  ChainDescriptor,
-} from './core/types.js';
-export type { LogEntry, LogHandler, LoggerConfig, Logger } from './core/logger.js';
+    App,
+    AppConfig,
+    LogLevel,
+    WalletApi,
+    StorageApi,
+    ChainApi,
+    BulletinApi,
+    Account,
+    ChainDescriptor,
+} from "./core/types.js";
+export type { LogEntry, LogHandler, LoggerConfig, Logger } from "./core/logger.js";
 
 // Chain descriptors
-export { chains } from './chain/chains.js';
+export { chains } from "./chain/chains.js";

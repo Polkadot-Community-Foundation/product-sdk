@@ -4,13 +4,13 @@
  * Derives product-scoped accounts from a parent account
  */
 
-import { createLogger } from '../core/logger.js';
-import { hash } from '../crypto/hashing.js';
-import { ss58Encode, ss58Decode } from '../address/ss58.js';
-import { deriveH160 } from '../address/h160.js';
-import type { ProductAccountInfo, AnonymousAliasInfo, RingLocation } from './types.js';
+import { createLogger } from "../core/logger.js";
+import { hash } from "../crypto/hashing.js";
+import { ss58Encode, ss58Decode } from "../address/ss58.js";
+import { deriveH160 } from "../address/h160.js";
+import type { ProductAccountInfo, AnonymousAliasInfo, RingLocation } from "./types.js";
 
-const log = createLogger('identity');
+const log = createLogger("identity");
 
 /**
  * Derive a product-scoped account from a parent account
@@ -33,34 +33,34 @@ const log = createLogger('identity');
  * ```
  */
 export function deriveProductAccount(
-  parentAddress: string,
-  productName: string,
-  ss58Prefix: number = 42
+    parentAddress: string,
+    productName: string,
+    ss58Prefix: number = 42,
 ): ProductAccountInfo {
-  const { publicKey: parentPublicKey } = ss58Decode(parentAddress);
+    const { publicKey: parentPublicKey } = ss58Decode(parentAddress);
 
-  // Derive product public key: blake2b-256(parentPublicKey || productName)
-  const productNameBytes = new TextEncoder().encode(productName);
-  const combined = new Uint8Array(parentPublicKey.length + productNameBytes.length);
-  combined.set(parentPublicKey, 0);
-  combined.set(productNameBytes, parentPublicKey.length);
+    // Derive product public key: blake2b-256(parentPublicKey || productName)
+    const productNameBytes = new TextEncoder().encode(productName);
+    const combined = new Uint8Array(parentPublicKey.length + productNameBytes.length);
+    combined.set(parentPublicKey, 0);
+    combined.set(productNameBytes, parentPublicKey.length);
 
-  const productPublicKey = hash(combined, 'blake2b-256');
-  const address = ss58Encode(productPublicKey, ss58Prefix);
-  const h160Address = deriveH160(productPublicKey);
+    const productPublicKey = hash(combined, "blake2b-256");
+    const address = ss58Encode(productPublicKey, ss58Prefix);
+    const h160Address = deriveH160(productPublicKey);
 
-  log.debug('Derived product account', {
-    parentAddress,
-    productName,
-    address,
-  });
+    log.debug("Derived product account", {
+        parentAddress,
+        productName,
+        address,
+    });
 
-  return {
-    address,
-    h160Address,
-    parentAddress,
-    productName,
-  };
+    return {
+        address,
+        h160Address,
+        parentAddress,
+        productName,
+    };
 }
 
 /**
@@ -72,24 +72,24 @@ export function deriveProductAccount(
  * @returns True if derivation is valid
  */
 export function verifyProductAccount(
-  productAddress: string,
-  parentAddress: string,
-  productName: string
+    productAddress: string,
+    parentAddress: string,
+    productName: string,
 ): boolean {
-  try {
-    const derived = deriveProductAccount(parentAddress, productName);
-    const { publicKey: productKey } = ss58Decode(productAddress);
-    const { publicKey: derivedKey } = ss58Decode(derived.address);
+    try {
+        const derived = deriveProductAccount(parentAddress, productName);
+        const { publicKey: productKey } = ss58Decode(productAddress);
+        const { publicKey: derivedKey } = ss58Decode(derived.address);
 
-    // Compare public keys
-    if (productKey.length !== derivedKey.length) return false;
-    for (let i = 0; i < productKey.length; i++) {
-      if (productKey[i] !== derivedKey[i]) return false;
+        // Compare public keys
+        if (productKey.length !== derivedKey.length) return false;
+        for (let i = 0; i < productKey.length; i++) {
+            if (productKey[i] !== derivedKey[i]) return false;
+        }
+        return true;
+    } catch {
+        return false;
     }
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /**
@@ -103,17 +103,17 @@ export function verifyProductAccount(
  * @returns Anonymous alias info
  */
 export function deriveAnonymousAlias(
-  context: string,
-  ringLocation: RingLocation
+    context: string,
+    ringLocation: RingLocation,
 ): AnonymousAliasInfo {
-  log.debug('Deriving anonymous alias', { context, ringLocation });
+    log.debug("Deriving anonymous alias", { context, ringLocation });
 
-  // TODO: Implement Ring VRF alias derivation
-  // This requires the Ring VRF implementation from TruAPI
-  throw new Error(
-    'deriveAnonymousAlias() is not yet implemented. ' +
-      'This requires container mode with Ring VRF support.'
-  );
+    // TODO: Implement Ring VRF alias derivation
+    // This requires the Ring VRF implementation from TruAPI
+    throw new Error(
+        "deriveAnonymousAlias() is not yet implemented. " +
+            "This requires container mode with Ring VRF support.",
+    );
 }
 
 /**
@@ -124,16 +124,16 @@ export function deriveAnonymousAlias(
  * @returns Proof bytes
  */
 export async function createRingProof(
-  message: Uint8Array,
-  ringLocation: RingLocation
+    message: Uint8Array,
+    ringLocation: RingLocation,
 ): Promise<Uint8Array> {
-  log.debug('Creating ring proof', { ringLocation });
+    log.debug("Creating ring proof", { ringLocation });
 
-  // TODO: Implement Ring VRF proof creation via TruAPI
-  throw new Error(
-    'createRingProof() is not yet implemented. ' +
-      'This requires container mode with Ring VRF support.'
-  );
+    // TODO: Implement Ring VRF proof creation via TruAPI
+    throw new Error(
+        "createRingProof() is not yet implemented. " +
+            "This requires container mode with Ring VRF support.",
+    );
 }
 
 /**
@@ -145,15 +145,15 @@ export async function createRingProof(
  * @returns True if proof is valid
  */
 export async function verifyRingProof(
-  message: Uint8Array,
-  proof: Uint8Array,
-  alias: string
+    message: Uint8Array,
+    proof: Uint8Array,
+    alias: string,
 ): Promise<boolean> {
-  log.debug('Verifying ring proof');
+    log.debug("Verifying ring proof");
 
-  // TODO: Implement Ring VRF proof verification
-  throw new Error(
-    'verifyRingProof() is not yet implemented. ' +
-      'This requires container mode with Ring VRF support.'
-  );
+    // TODO: Implement Ring VRF proof verification
+    throw new Error(
+        "verifyRingProof() is not yet implemented. " +
+            "This requires container mode with Ring VRF support.",
+    );
 }

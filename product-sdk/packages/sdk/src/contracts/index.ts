@@ -5,17 +5,17 @@
  * Supports ink! contracts on Asset Hub and other parachains.
  */
 
-export { Contract } from './contract.js';
+export { Contract } from "./contract.js";
 export type {
-  ContractMetadata,
-  ContractMessage,
-  ContractConstructor,
-  ContractEventDef,
-  ContractArg,
-  ContractType,
-  CallOptions,
-  CallResult,
-  DryRunResult,
-  ContractEvent,
-  DeployResult,
-} from './types.js';
+    ContractMetadata,
+    ContractMessage,
+    ContractConstructor,
+    ContractEventDef,
+    ContractArg,
+    ContractType,
+    CallOptions,
+    CallResult,
+    DryRunResult,
+    ContractEvent,
+    DeployResult,
+} from "./types.js";

@@ -7,16 +7,16 @@
  * Credit: Based on polkadot-apps/packages/signer
  */
 
-export { WalletManager } from './wallet.js';
-export type { WalletSubscriber, Unsubscribe } from './wallet.js';
+export { WalletManager } from "./wallet.js";
+export type { WalletSubscriber, Unsubscribe } from "./wallet.js";
 export type {
-  ConnectionStatus,
-  ProviderType,
-  WalletAccount,
-  WalletState,
-  WalletError,
-  WalletErrorType,
-  WalletOptions,
-  ProductAccount,
-  RingLocation,
-} from './types.js';
+    ConnectionStatus,
+    ProviderType,
+    WalletAccount,
+    WalletState,
+    WalletError,
+    WalletErrorType,
+    WalletOptions,
+    ProductAccount,
+    RingLocation,
+} from "./types.js";

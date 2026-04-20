@@ -7,28 +7,28 @@
 
 // DotNS utilities
 export {
-  isValidDotNsName,
-  normalizeDotNsName,
-  resolveDotNs,
-  reverseDotNs,
-  isDotNsAvailable,
-} from './dotns.js';
+    isValidDotNsName,
+    normalizeDotNsName,
+    resolveDotNs,
+    reverseDotNs,
+    isDotNsAvailable,
+} from "./dotns.js";
 
 // Product account utilities
 export {
-  deriveProductAccount,
-  verifyProductAccount,
-  deriveAnonymousAlias,
-  createRingProof,
-  verifyRingProof,
-} from './product-account.js';
+    deriveProductAccount,
+    verifyProductAccount,
+    deriveAnonymousAlias,
+    createRingProof,
+    verifyRingProof,
+} from "./product-account.js";
 
 // Types
 export type {
-  DotNsRecord,
-  ProductAccountInfo,
-  AnonymousAliasInfo,
-  RingLocation,
-  VerificationResult,
-  OnChainIdentity,
-} from './types.js';
+    DotNsRecord,
+    ProductAccountInfo,
+    AnonymousAliasInfo,
+    RingLocation,
+    VerificationResult,
+    OnChainIdentity,
+} from "./types.js";

@@ -9,21 +9,21 @@
 
 // SS58 utilities
 export {
-  isValidSs58,
-  ss58Decode,
-  ss58Encode,
-  normalizeSs58,
-  toGenericSs58,
-  toPolkadotSs58,
-  accountIdFromBytes,
-  accountIdBytes,
-} from './ss58.js';
+    isValidSs58,
+    ss58Decode,
+    ss58Encode,
+    normalizeSs58,
+    toGenericSs58,
+    toPolkadotSs58,
+    accountIdFromBytes,
+    accountIdBytes,
+} from "./ss58.js";
 
 // H160 (EVM) utilities
-export { deriveH160, ss58ToH160, h160ToSs58, toH160, isValidH160 } from './h160.js';
+export { deriveH160, ss58ToH160, h160ToSs58, toH160, isValidH160 } from "./h160.js";
 
 // Display utilities
-export { truncateAddress, addressesEqual } from './display.js';
+export { truncateAddress, addressesEqual } from "./display.js";
 
 // Types
-export type { SS58String, HexString, H160Address, Address } from './types.js';
+export type { SS58String, HexString, H160Address, Address } from "./types.js";

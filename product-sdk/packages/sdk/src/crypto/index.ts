@@ -8,7 +8,7 @@
  * Credit: Based on patterns from polkadot-apps
  */
 
-export * from './encryption.js';
-export * from './hashing.js';
-export * from './kdf.js';
-export * from './types.js';
+export * from "./encryption.js";
+export * from "./hashing.js";
+export * from "./kdf.js";
+export * from "./types.js";

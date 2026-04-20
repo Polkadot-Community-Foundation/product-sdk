@@ -1,31 +1,31 @@
 {
-  "name": "@parity/product-sdk-address",
-  "version": "0.1.0-beta.1",
-  "description": "Substrate and EVM address utilities — SS58/H160 encoding, validation, and conversion",
-  "type": "module",
-  "sideEffects": false,
-  "main": "./dist/index.js",
-  "module": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
-  },
-  "files": ["dist", "src"],
-  "scripts": {
-    "build": "tsup",
-    "test": "vitest",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "@noble/hashes": "^1.7.1",
-    "@polkadot-api/substrate-bindings": "^0.12.0"
-  },
-  "devDependencies": {
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
-  },
-  "license": "Apache-2.0"
+    "name": "@parity/product-sdk-address",
+    "version": "0.1.0-beta.1",
+    "description": "Substrate and EVM address utilities — SS58/H160 encoding, validation, and conversion",
+    "type": "module",
+    "sideEffects": false,
+    "main": "./dist/index.js",
+    "module": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "import": "./dist/index.js",
+            "types": "./dist/index.d.ts"
+        }
+    },
+    "files": ["dist", "src"],
+    "scripts": {
+        "build": "tsup",
+        "test": "vitest",
+        "clean": "rm -rf dist"
+    },
+    "dependencies": {
+        "@noble/hashes": "^1.7.1",
+        "@polkadot-api/substrate-bindings": "^0.12.0"
+    },
+    "devDependencies": {
+        "typescript": "^5.7.0",
+        "vitest": "^3.0.0"
+    },
+    "license": "Apache-2.0"
 }

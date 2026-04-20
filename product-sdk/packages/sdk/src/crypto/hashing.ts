@@ -9,9 +9,9 @@
  * - sh33ts: Blake2b-256 for content hashing
  */
 
-import { sha256 } from '@noble/hashes/sha256';
-import { blake2b } from '@noble/hashes/blake2b';
-import type { HashAlgorithm } from './types.js';
+import { sha256 } from "@noble/hashes/sha256";
+import { blake2b } from "@noble/hashes/blake2b";
+import type { HashAlgorithm } from "./types.js";
 
 /**
  * Hash data using the specified algorithm
@@ -26,22 +26,19 @@ import type { HashAlgorithm } from './types.js';
  * const cidHash = hash(fileBytes, 'blake2b-256');
  * ```
  */
-export function hash(
-  data: string | Uint8Array,
-  algorithm: HashAlgorithm = 'sha-256'
-): Uint8Array {
-  const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : data;
+export function hash(data: string | Uint8Array, algorithm: HashAlgorithm = "sha-256"): Uint8Array {
+    const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
 
-  switch (algorithm) {
-    case 'sha-256':
-      return sha256(bytes);
-    case 'blake2b-256':
-      return blake2b(bytes, { dkLen: 32 });
-    case 'blake2b-512':
-      return blake2b(bytes, { dkLen: 64 });
-    default:
-      throw new Error(`Unsupported hash algorithm: ${algorithm}`);
-  }
+    switch (algorithm) {
+        case "sha-256":
+            return sha256(bytes);
+        case "blake2b-256":
+            return blake2b(bytes, { dkLen: 32 });
+        case "blake2b-512":
+            return blake2b(bytes, { dkLen: 64 });
+        default:
+            throw new Error(`Unsupported hash algorithm: ${algorithm}`);
+    }
 }
 
 /**
@@ -58,20 +55,17 @@ export function hash(
  * const nullifier = hashConcat('sha-256', secret, publicKey);
  * ```
  */
-export function hashConcat(
-  algorithm: HashAlgorithm,
-  ...buffers: Uint8Array[]
-): Uint8Array {
-  const totalLength = buffers.reduce((acc, buf) => acc + buf.length, 0);
-  const combined = new Uint8Array(totalLength);
+export function hashConcat(algorithm: HashAlgorithm, ...buffers: Uint8Array[]): Uint8Array {
+    const totalLength = buffers.reduce((acc, buf) => acc + buf.length, 0);
+    const combined = new Uint8Array(totalLength);
 
-  let offset = 0;
-  for (const buf of buffers) {
-    combined.set(buf, offset);
-    offset += buf.length;
-  }
+    let offset = 0;
+    for (const buf of buffers) {
+        combined.set(buf, offset);
+        offset += buf.length;
+    }
 
-  return hash(combined, algorithm);
+    return hash(combined, algorithm);
 }
 
 /**
@@ -81,30 +75,27 @@ export function hashConcat(
  * @param algorithm - Hash algorithm
  * @returns Hex-encoded hash
  */
-export function hashToHex(
-  data: string | Uint8Array,
-  algorithm: HashAlgorithm = 'sha-256'
-): string {
-  return toHex(hash(data, algorithm));
+export function hashToHex(data: string | Uint8Array, algorithm: HashAlgorithm = "sha-256"): string {
+    return toHex(hash(data, algorithm));
 }
 
 /**
  * Convert bytes to hex string
  */
 export function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    return Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
 }
 
 /**
  * Convert hex string to bytes
  */
 export function fromHex(hex: string): Uint8Array {
-  const cleanHex = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = new Uint8Array(cleanHex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
+    const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
+    const bytes = new Uint8Array(cleanHex.length / 2);
+    for (let i = 0; i < bytes.length; i++) {
+        bytes[i] = parseInt(cleanHex.slice(i * 2, i * 2 + 2), 16);
+    }
+    return bytes;
 }

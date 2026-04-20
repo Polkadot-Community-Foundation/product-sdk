@@ -2,9 +2,9 @@
  * useChain hook
  */
 
-import { useMemo } from 'react';
-import { useProductSDK } from './context.js';
-import type { ChainDescriptor } from '../core/types.js';
+import { useMemo } from "react";
+import { useProductSDK } from "./context.js";
+import type { ChainDescriptor } from "../core/types.js";
 
 /**
  * Hook to get a typed chain client
@@ -25,9 +25,9 @@ import type { ChainDescriptor } from '../core/types.js';
  * ```
  */
 export function useChain<T>(chain: ChainDescriptor<T>): T {
-  const app = useProductSDK();
+    const app = useProductSDK();
 
-  return useMemo(() => {
-    return app.chain.getClient(chain);
-  }, [app, chain]);
+    return useMemo(() => {
+        return app.chain.getClient(chain);
+    }, [app, chain]);
 }

@@ -26,16 +26,16 @@
  */
 
 // Provider
-export { ProductSDKProvider } from './provider.js';
-export type { ProductSDKProviderProps } from './provider.js';
+export { ProductSDKProvider } from "./provider.js";
+export type { ProductSDKProviderProps } from "./provider.js";
 
 // Context
-export { ProductSDKContext, useProductSDK } from './context.js';
+export { ProductSDKContext, useProductSDK } from "./context.js";
 
 // Hooks
-export { useWallet } from './useWallet.js';
-export type { UseWalletState, UseWalletActions, UseWalletReturn } from './useWallet.js';
+export { useWallet } from "./useWallet.js";
+export type { UseWalletState, UseWalletActions, UseWalletReturn } from "./useWallet.js";
 
-export { useStorage, useStorageString } from './useStorage.js';
+export { useStorage, useStorageString } from "./useStorage.js";
 
-export { useChain } from './useChain.js';
+export { useChain } from "./useChain.js";

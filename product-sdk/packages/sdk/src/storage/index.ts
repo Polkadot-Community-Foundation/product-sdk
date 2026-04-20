@@ -7,5 +7,5 @@
  * Credit: Based on polkadot-apps/packages/storage
  */
 
-export { createKvStore } from './kv-store.js';
-export type { KvStore, KvStoreOptions, HostLocalStorage } from './types.js';
+export { createKvStore } from "./kv-store.js";
+export type { KvStore, KvStoreOptions, HostLocalStorage } from "./types.js";

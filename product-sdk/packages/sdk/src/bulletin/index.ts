@@ -8,19 +8,19 @@
  */
 
 // Client
-export { BulletinClient, getGateway, gatewayUrl } from './client.js';
+export { BulletinClient, getGateway, gatewayUrl } from "./client.js";
 
 // CID utilities
-export { computeCid, cidToPreimageKey, computeCidFromString } from './cid.js';
+export { computeCid, cidToPreimageKey, computeCidFromString } from "./cid.js";
 
 // Types
 export type {
-  Environment,
-  UploadOptions,
-  UploadResult,
-  UploadProgress,
-  FetchOptions,
-  BatchUploadItem,
-  BatchUploadResult,
-  BatchUploadOptions,
-} from './types.js';
+    Environment,
+    UploadOptions,
+    UploadResult,
+    UploadProgress,
+    FetchOptions,
+    BatchUploadItem,
+    BatchUploadResult,
+    BatchUploadOptions,
+} from "./types.js";
