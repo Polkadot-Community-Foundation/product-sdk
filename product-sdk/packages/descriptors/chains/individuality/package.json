@@ -1,0 +1,9 @@
+{
+  "name": "@parity/product-sdk-descriptors-individuality",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "dependencies": {
+    "@polkadot-api/descriptors": "file:generated"
+  }
+}

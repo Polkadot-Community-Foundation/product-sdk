@@ -1,0 +1,9 @@
+{
+    "version": 0,
+    "descriptorPath": "generated",
+    "entries": {
+        "bulletin": {
+            "wsUrl": "wss://paseo-bulletin-rpc.polkadot.io"
+        }
+    }
+}

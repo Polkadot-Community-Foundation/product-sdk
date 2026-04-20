@@ -1,0 +1,9 @@
+{
+    "version": 0,
+    "descriptorPath": "generated",
+    "entries": {
+        "individuality": {
+            "wsUrl": "wss://paseo-people-next-rpc.polkadot.io"
+        }
+    }
+}

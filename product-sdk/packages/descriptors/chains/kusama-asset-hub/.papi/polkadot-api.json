@@ -1,0 +1,9 @@
+{
+    "version": 0,
+    "descriptorPath": "generated",
+    "entries": {
+        "kusama_asset_hub": {
+            "chain": "ksmcc3_asset_hub"
+        }
+    }
+}

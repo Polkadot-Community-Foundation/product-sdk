@@ -103,6 +103,16 @@ importers:
         specifier: ^3.0.0
         version: 3.2.4(@types/node@25.6.0)
 
+  packages/descriptors:
+    dependencies:
+      polkadot-api:
+        specifier: ^1.9.5
+        version: 1.23.3(postcss@8.5.10)(rxjs@7.8.2)
+    devDependencies:
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+
   packages/host:
     dependencies:
       '@parity/product-sdk-logger':
@@ -284,6 +294,25 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.6.0)
+
+  packages/utils:
+    dependencies:
+      '@noble/hashes':
+        specifier: ^1.7.1
+        version: 1.8.0
+      '@parity/product-sdk-logger':
+        specifier: workspace:*
+        version: link:../logger
+    devDependencies:
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.0(postcss@8.5.10)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
+      vitest:
+        specifier: ^3.1.2
         version: 3.2.4(@types/node@25.6.0)
 
 packages:

@@ -1,0 +1,9 @@
+{
+    "version": 0,
+    "descriptorPath": "generated",
+    "entries": {
+        "paseo_asset_hub": {
+            "chain": "paseo_asset_hub"
+        }
+    }
+}

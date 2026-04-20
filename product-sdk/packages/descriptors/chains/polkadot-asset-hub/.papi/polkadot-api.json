@@ -1,0 +1,9 @@
+{
+    "version": 0,
+    "descriptorPath": "generated",
+    "entries": {
+        "polkadot_asset_hub": {
+            "chain": "polkadot_asset_hub"
+        }
+    }
+}

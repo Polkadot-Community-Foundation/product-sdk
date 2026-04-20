@@ -1,0 +1,45 @@
+{
+  "name": "@parity/product-sdk-descriptors",
+  "version": "0.0.1",
+  "description": "PAPI-generated chain descriptors for Polkadot ecosystem",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    "./bulletin": {
+      "types": "./chains/bulletin/generated/bulletin.d.ts",
+      "default": "./chains/bulletin/generated/bulletin.js"
+    },
+    "./individuality": {
+      "types": "./chains/individuality/generated/individuality.d.ts",
+      "default": "./chains/individuality/generated/individuality.js"
+    },
+    "./kusama-asset-hub": {
+      "types": "./chains/kusama-asset-hub/generated/kusama_asset_hub.d.ts",
+      "default": "./chains/kusama-asset-hub/generated/kusama_asset_hub.js"
+    },
+    "./paseo-asset-hub": {
+      "types": "./chains/paseo-asset-hub/generated/paseo_asset_hub.d.ts",
+      "default": "./chains/paseo-asset-hub/generated/paseo_asset_hub.js"
+    },
+    "./polkadot-asset-hub": {
+      "types": "./chains/polkadot-asset-hub/generated/polkadot_asset_hub.d.ts",
+      "default": "./chains/polkadot-asset-hub/generated/polkadot_asset_hub.js"
+    }
+  },
+  "scripts": {
+    "generate": "./scripts/generate.sh",
+    "build": "./scripts/build.sh",
+    "clean": "rm -rf chains/*/generated"
+  },
+  "dependencies": {
+    "polkadot-api": "^1.9.5"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "files": [
+    "chains/*/generated/**/*.js",
+    "chains/*/generated/**/*.d.ts",
+    "chains/*/.papi/**/*"
+  ]
+}
