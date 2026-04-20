@@ -1,21 +1,35 @@
-#!/bin/bash
-# Build all chain descriptors
-# Compiles TypeScript descriptors to JavaScript
+#!/usr/bin/env bash
+# Build per-chain descriptors. Each chain has its own papi config and
+# generates into its own chains/<name>/generated/dist/ directory.
+# This avoids bundling all chains into one index.mjs.
+set -euo pipefail
 
-set -e
+cd "$(dirname "$0")/.."
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CHAINS_DIR="$SCRIPT_DIR/../chains"
+CHAINS="polkadot-asset-hub kusama-asset-hub paseo-asset-hub bulletin individuality"
 
-echo "Building descriptors for all chains..."
+for chain in $CHAINS; do
+    dir="chains/$chain"
 
-for chain_dir in "$CHAINS_DIR"/*/; do
-  chain_name=$(basename "$chain_dir")
-  echo "→ Building $chain_name..."
+    # Skip if already built
+    if [ -f "$dir/generated/dist/index.mjs" ]; then
+        echo "  Skipping $chain (already built)"
+        continue
+    fi
 
-  cd "$chain_dir"
-  npx tsc --build
-  cd - > /dev/null
+    echo "  Building $chain..."
+    (
+        cd "$dir"
+        npx papi generate --config .papi/polkadot-api.json
+
+        # papi adds "dependencies": { "@polkadot-api/descriptors": "file:generated" }
+        # to the chain's package.json — strip it so it doesn't interfere.
+        node --input-type=commonjs -e '
+            const p = require("./package.json");
+            delete p.dependencies;
+            require("fs").writeFileSync("package.json", JSON.stringify(p, null, 4) + "\n");
+        '
+    )
 done
 
 echo "✓ All descriptors built successfully"
