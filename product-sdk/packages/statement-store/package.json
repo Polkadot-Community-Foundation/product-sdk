@@ -1,0 +1,46 @@
+{
+    "name": "@parity/product-sdk-statement-store",
+    "description": "Publish/subscribe client for the Polkadot Statement Store with host-first transport and topic-based routing",
+    "version": "0.0.1",
+    "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": ["dist"],
+    "sideEffects": false,
+    "publishConfig": {
+        "access": "public"
+    },
+    "scripts": {
+        "build": "tsup",
+        "clean": "rm -rf dist",
+        "test": "vitest run"
+    },
+    "dependencies": {
+        "@novasamatech/sdk-statement": "catalog:",
+        "@polkadot-api/substrate-client": "catalog:",
+        "@parity/product-sdk-host": "workspace:*",
+        "@parity/product-sdk-logger": "workspace:*",
+        "@parity/product-sdk-utils": "workspace:*",
+        "polkadot-api": "catalog:"
+    },
+    "peerDependencies": {
+        "@novasamatech/product-sdk": ">=0.6.0"
+    },
+    "peerDependenciesMeta": {
+        "@novasamatech/product-sdk": {
+            "optional": true
+        }
+    },
+    "devDependencies": {
+        "@novasamatech/product-sdk": "catalog:",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    }
+}
