@@ -1,3 +1,4 @@
+export { BulletinClient } from "./client.js";
 export { checkAuthorization } from "./authorization.js";
 export {
     computeCid,
