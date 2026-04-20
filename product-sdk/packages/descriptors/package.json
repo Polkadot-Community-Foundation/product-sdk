@@ -6,29 +6,34 @@
     "type": "module",
     "exports": {
         "./bulletin": {
-            "types": "./chains/bulletin/generated/bulletin.d.ts",
-            "default": "./chains/bulletin/generated/bulletin.js"
+            "types": "./chains/bulletin/generated/dist/index.d.ts",
+            "import": "./chains/bulletin/generated/dist/index.mjs",
+            "require": "./chains/bulletin/generated/dist/index.js"
         },
         "./individuality": {
-            "types": "./chains/individuality/generated/individuality.d.ts",
-            "default": "./chains/individuality/generated/individuality.js"
+            "types": "./chains/individuality/generated/dist/index.d.ts",
+            "import": "./chains/individuality/generated/dist/index.mjs",
+            "require": "./chains/individuality/generated/dist/index.js"
         },
         "./kusama-asset-hub": {
-            "types": "./chains/kusama-asset-hub/generated/kusama_asset_hub.d.ts",
-            "default": "./chains/kusama-asset-hub/generated/kusama_asset_hub.js"
+            "types": "./chains/kusama-asset-hub/generated/dist/index.d.ts",
+            "import": "./chains/kusama-asset-hub/generated/dist/index.mjs",
+            "require": "./chains/kusama-asset-hub/generated/dist/index.js"
         },
         "./paseo-asset-hub": {
-            "types": "./chains/paseo-asset-hub/generated/paseo_asset_hub.d.ts",
-            "default": "./chains/paseo-asset-hub/generated/paseo_asset_hub.js"
+            "types": "./chains/paseo-asset-hub/generated/dist/index.d.ts",
+            "import": "./chains/paseo-asset-hub/generated/dist/index.mjs",
+            "require": "./chains/paseo-asset-hub/generated/dist/index.js"
         },
         "./polkadot-asset-hub": {
-            "types": "./chains/polkadot-asset-hub/generated/polkadot_asset_hub.d.ts",
-            "default": "./chains/polkadot-asset-hub/generated/polkadot_asset_hub.js"
+            "types": "./chains/polkadot-asset-hub/generated/dist/index.d.ts",
+            "import": "./chains/polkadot-asset-hub/generated/dist/index.mjs",
+            "require": "./chains/polkadot-asset-hub/generated/dist/index.js"
         }
     },
     "scripts": {
         "generate": "./scripts/generate.sh",
-        "build": "./scripts/build.sh",
+        "build": "echo 'Descriptors are pre-generated, no build needed'",
         "clean": "rm -rf chains/*/generated"
     },
     "dependencies": {
@@ -37,5 +42,5 @@
     "devDependencies": {
         "typescript": "^5.8.3"
     },
-    "files": ["chains/*/generated/**/*.js", "chains/*/generated/**/*.d.ts", "chains/*/.papi/**/*"]
+    "files": ["chains/*/generated/dist/**/*.js", "chains/*/generated/dist/**/*.d.ts", "chains/*/generated/dist/**/*.mjs", "chains/*/.papi/**/*"]
 }

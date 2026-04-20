@@ -56,9 +56,6 @@
     "files": ["dist", "src"],
     "scripts": {
         "build": "tsup",
-        "test": "vitest",
-        "test:run": "vitest run",
-        "lint": "eslint src/",
         "clean": "rm -rf dist"
     },
     "dependencies": {

@@ -46,7 +46,9 @@ class HostTransport implements StatementTransport {
             const sub = this.store.subscribe(topics, (statements) => {
                 // product-sdk delivers HostSignedStatement[] (Uint8Array fields, { tag } enums).
                 // sdk-statement expects Statement (hex string fields, { type } enums).
-                const converted = statements.map(hostSignedStatementToSdk);
+                // Type assertion needed: store.subscribe callback types are unknown[] at the interface
+                // but actual runtime values are HostSignedStatement[].
+                const converted = (statements as HostSignedStatement[]).map(hostSignedStatementToSdk);
                 onStatements(converted);
             });
 
@@ -74,7 +76,12 @@ class HostTransport implements StatementTransport {
         // so the host's SCALE codec can encode it correctly.
         const hostStatement = sdkStatementToHost(statement);
         const proof = await this.store.createProof(credentials.accountId, hostStatement);
-        const signedStatement: HostSignedStatement = { ...hostStatement, proof };
+        // Type assertion: StatementProof from host types is compatible with HostSignedStatement.proof
+        // at runtime, but TypeScript can't verify cross-package type compatibility.
+        const signedStatement: HostSignedStatement = {
+            ...hostStatement,
+            proof: proof as HostSignedStatement["proof"],
+        };
         await this.store.submit(signedStatement);
 
         log.debug("Statement submitted via host");

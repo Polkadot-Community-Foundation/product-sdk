@@ -7,7 +7,7 @@ export default defineConfig({
     sourcemap: true,
     clean: true,
     target: "es2022",
-    external: ["@novasamatech/product-sdk", "@novasamatech/host-api"],
+    external: ["@novasamatech/sdk-statement", "@novasamatech/product-sdk"],
     define: {
         "import.meta.vitest": "undefined",
     },

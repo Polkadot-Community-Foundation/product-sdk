@@ -20,13 +20,15 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
+        "@parity/product-sdk-descriptors": "workspace:*",
         "@parity/product-sdk-logger": "workspace:*",
         "@parity/product-sdk-host": "workspace:*",
         "polkadot-api": "^1.9.0"
     },
     "devDependencies": {
-        "typescript": "^5.7.0",
-        "vitest": "^3.0.0"
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
     },
     "license": "Apache-2.0"
 }

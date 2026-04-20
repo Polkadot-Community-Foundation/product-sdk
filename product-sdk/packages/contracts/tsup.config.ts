@@ -1,13 +1,15 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-    entry: ["src/index.ts"],
+    entry: {
+        index: "src/index.ts",
+        codegen: "src/codegen.ts",
+    },
     format: ["esm"],
     dts: true,
     sourcemap: true,
     clean: true,
     target: "es2022",
-    external: ["@novasamatech/product-sdk", "@novasamatech/host-api"],
     define: {
         "import.meta.vitest": "undefined",
     },

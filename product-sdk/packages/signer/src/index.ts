@@ -6,6 +6,7 @@ export type {
     ProviderType,
     Result,
     SignerAccount,
+    SignerManager,
     SignerManagerOptions,
     SignerState,
 } from "./types.js";

@@ -6,6 +6,9 @@ settings:
 
 catalogs:
   default:
+    '@novasamatech/host-api':
+      specifier: ^0.7.0
+      version: 0.7.0
     '@novasamatech/product-sdk':
       specifier: ^0.6.17
       version: 0.6.18
@@ -97,6 +100,9 @@ importers:
 
   packages/chain-client:
     dependencies:
+      '@parity/product-sdk-descriptors':
+        specifier: workspace:*
+        version: link:../descriptors
       '@parity/product-sdk-host':
         specifier: workspace:*
         version: link:../host
@@ -107,11 +113,14 @@ importers:
         specifier: ^1.9.0
         version: 1.23.3(postcss@8.5.10)(rxjs@7.8.2)
     devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.0(postcss@8.5.10)(typescript@5.9.3)
       typescript:
-        specifier: ^5.7.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.2.4(@types/node@25.6.0)
 
   packages/contracts:
@@ -315,15 +324,25 @@ importers:
         specifier: workspace:*
         version: link:../logger
       polkadot-api:
-        specifier: ^1.9.0
+        specifier: 'catalog:'
         version: 1.23.3(postcss@8.5.10)(rxjs@7.8.2)
     devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.0(postcss@8.5.10)(typescript@5.9.3)
       typescript:
-        specifier: ^5.7.0
+        specifier: 'catalog:'
         version: 5.9.3
       vitest:
-        specifier: ^3.0.0
+        specifier: 'catalog:'
         version: 3.2.4(@types/node@25.6.0)
+    optionalDependencies:
+      '@novasamatech/host-api':
+        specifier: 'catalog:'
+        version: 0.7.0
+      '@novasamatech/product-sdk':
+        specifier: 'catalog:'
+        version: 0.6.18(@polkadot/api@16.5.6)(@polkadot/util@14.0.3)
 
   packages/statement-store:
     dependencies:
@@ -864,11 +883,17 @@ packages:
   '@novasamatech/host-api@0.6.18':
     resolution: {integrity: sha512-5U5tYRbY/v49BqHH+iHPIP6OH7KJjXUMypaXSXtZK/J3IsQAqDLBlu/LqpDrNxHqEK1sKY5EyYla840mqmkwPg==}
 
+  '@novasamatech/host-api@0.7.0':
+    resolution: {integrity: sha512-iKlhY1es9mwMNFoYvDrDm1R3HZH6Decgj/28WYz/LpGjywv2zhxGiK9JBoxNSsBaURbXsE8cXK/hrcl7+qEyXg==}
+
   '@novasamatech/product-sdk@0.6.18':
     resolution: {integrity: sha512-LCrOJKL9NCweFomZfw1X24uY69fGfwxaKXcFe1UQISNLAAM1y/0thKztNGpt8EQdO8BEfcsW7Ym7PuSeVZz2Dg==}
 
   '@novasamatech/scale@0.6.18':
     resolution: {integrity: sha512-xRvBrzJSvCseQ62zLReS3EtiQjuiTY+c+yOyx6If9dBRzX5FL52OazFLsdSaq3wOe8441TPXL1vediotYFZlRg==}
+
+  '@novasamatech/scale@0.7.0':
+    resolution: {integrity: sha512-JSeLpvrDtHZ6hdYhPCFp4omugHZnqoWBlzaxXKV5IuUx2zDz7q20dh0oxz4Si/mU51zsoQWaGLLJXQ6gTUuFEA==}
 
   '@novasamatech/sdk-statement@0.5.0':
     resolution: {integrity: sha512-Cko04X12lFIMgknhfpigdt7kTrkrEHb7frsgX36zZzYvFIm+lCPCUo5sGq4LgHemT1DLNUgLVna+vKvsn4kJBg==}
@@ -1847,6 +1872,11 @@ packages:
     engines: {node: ^18 || >=20}
     hasBin: true
 
+  nanoid@5.1.9:
+    resolution: {integrity: sha512-ZUvP7KeBLe3OZ1ypw6dI/TzYJuvHP77IM4Ry73waSQTLn8/g8rpdjfyVAh7t1/+FjBtG4lCP42MEbDxOsRpBMw==}
+    engines: {node: ^18 || >=20}
+    hasBin: true
+
   neverthrow@8.2.0:
     resolution: {integrity: sha512-kOCT/1MCPAxY5iUV3wytNFUMUolzuwd/VF/1KCx7kf6CutrOsTie+84zTGTpgQycjvfLdBBdvBvFLqFD2c0wkQ==}
     engines: {node: '>=18'}
@@ -2631,6 +2661,15 @@ snapshots:
       neverthrow: 8.2.0
       scale-ts: 1.6.1
 
+  '@novasamatech/host-api@0.7.0':
+    dependencies:
+      '@novasamatech/scale': 0.7.0
+      nanoevents: 9.1.0
+      nanoid: 5.1.9
+      neverthrow: 8.2.0
+      scale-ts: 1.6.1
+    optional: true
+
   '@novasamatech/product-sdk@0.6.18(@polkadot/api@16.5.6)(@polkadot/util@14.0.3)':
     dependencies:
       '@novasamatech/host-api': 0.6.18
@@ -2649,6 +2688,12 @@ snapshots:
     dependencies:
       '@polkadot-api/utils': 0.2.0
       scale-ts: 1.6.1
+
+  '@novasamatech/scale@0.7.0':
+    dependencies:
+      '@polkadot-api/utils': 0.4.0
+      scale-ts: 1.6.1
+    optional: true
 
   '@novasamatech/sdk-statement@0.5.0(esbuild@0.27.7)(rxjs@7.8.2)':
     dependencies:
@@ -4000,6 +4045,9 @@ snapshots:
   nanoid@3.3.11: {}
 
   nanoid@5.1.7: {}
+
+  nanoid@5.1.9:
+    optional: true
 
   neverthrow@8.2.0:
     optionalDependencies:

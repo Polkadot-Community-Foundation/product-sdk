@@ -7,6 +7,7 @@ export default defineConfig({
     sourcemap: true,
     clean: true,
     target: "es2022",
+    external: ["@parity/product-sdk-descriptors"],
     define: {
         "import.meta.vitest": "undefined",
     },
