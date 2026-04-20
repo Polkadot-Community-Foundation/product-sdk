@@ -49,3 +49,9 @@
 [submodule "repos/host-playground"]
 	path = repos/host-playground
 	url = git@github.com:paritytech/host-playground.git
+[submodule "repos/task-rabbit"]
+	path = repos/task-rabbit
+	url = https://github.com/paritytech/task-rabbit
+[submodule "repos/tick3t"]
+	path = repos/tick3t
+	url = https://github.com/paritytech/tick3t
