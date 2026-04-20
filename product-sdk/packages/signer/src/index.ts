@@ -28,8 +28,21 @@ export {
     isExtensionError,
 } from "./errors.js";
 
-// Provider interface (for custom implementations)
-export type { SignerProvider, Unsubscribe } from "./providers/types.js";
+// Utilities
+export { sleep } from "./sleep.js";
+export { withRetry } from "./retry.js";
+export type { RetryOptions } from "./retry.js";
 
-// Note: Full SignerManager and provider implementations will be ported in a future update.
-// The core types and error classes are available for dependent packages.
+// Provider interface and implementations
+export type { SignerProvider, Unsubscribe } from "./providers/types.js";
+export { DevProvider } from "./providers/dev.js";
+export type { DevProviderOptions, DevAccountName, DevKeyType } from "./providers/dev.js";
+export { ExtensionProvider } from "./providers/extension.js";
+export type { ExtensionProviderOptions, ExtensionApi } from "./providers/extension.js";
+export { HostProvider } from "./providers/host.js";
+export type {
+    HostProviderOptions,
+    ProductAccount,
+    ContextualAlias,
+    RingLocation,
+} from "./providers/host.js";
