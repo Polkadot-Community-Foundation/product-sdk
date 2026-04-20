@@ -163,7 +163,7 @@ if (import.meta.vitest) {
             store,
             cleanup: () => {
                 // @ts-expect-error — remove shim
-                delete globalThis.localStorage;
+                globalThis.localStorage = undefined;
             },
         };
     }
@@ -227,7 +227,7 @@ if (import.meta.vitest) {
 
         test("getJSON returns null on corrupted JSON", async () => {
             const kv = createLocalStorageBackend((k) => k);
-            store["bad"] = "not-json{{{";
+            store.bad = "not-json{{{";
             expect(await kv.getJSON("bad")).toBeNull();
         });
 
@@ -282,7 +282,7 @@ if (import.meta.vitest) {
         test("no prefix means keys used as-is", async () => {
             const kv = createLocalStorageBackend(prefixer());
             await kv.set("theme", "dark");
-            expect(store["theme"]).toBe("dark");
+            expect(store.theme).toBe("dark");
         });
     });
 

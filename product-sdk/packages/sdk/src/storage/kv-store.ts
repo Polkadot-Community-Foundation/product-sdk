@@ -73,7 +73,7 @@ function createLocalStorageBackend(applyPrefix: (key: string) => string): KvStor
                 const keysToRemove: string[] = [];
                 for (let i = 0; i < globalThis.localStorage.length; i++) {
                     const key = globalThis.localStorage.key(i);
-                    if (key && key.startsWith(prefix)) {
+                    if (key?.startsWith(prefix)) {
                         keysToRemove.push(key);
                     }
                 }

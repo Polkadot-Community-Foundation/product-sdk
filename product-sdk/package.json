@@ -9,7 +9,9 @@
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean",
     "format": "biome format --write .",
-    "format:check": "biome format ."
+    "format:check": "biome format .",
+    "lint:biome": "biome lint .",
+    "check": "biome check ."
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",

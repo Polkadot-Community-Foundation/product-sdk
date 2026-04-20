@@ -22,7 +22,7 @@ function hexToBytes(hex: string): Uint8Array {
     const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
     const bytes = new Uint8Array(clean.length / 2);
     for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+        bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
     }
     return bytes;
 }
@@ -70,7 +70,7 @@ export function ss58ToH160(address: string): H160Address {
  * Constructs an "EVM-derived" AccountId32 by padding the H160 with 0xEE bytes.
  * These accounts are implicitly mapped in pallet-revive.
  */
-export function h160ToSs58(evmAddress: string, prefix: number = 42): string {
+export function h160ToSs58(evmAddress: string, prefix = 42): string {
     const hex = evmAddress.startsWith("0x") ? evmAddress.slice(2) : evmAddress;
     if (hex.length !== H160_BYTE_LEN * 2 || !/^[a-fA-F0-9]+$/.test(hex)) {
         throw new Error(`Invalid H160 address: ${evmAddress}`);

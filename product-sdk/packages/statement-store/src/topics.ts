@@ -140,7 +140,7 @@ if (import.meta.vitest) {
             hash[1] = 0xcd;
             const hex = topicToHex(hash);
             expect(hex).toMatch(/^0x/);
-            expect(hex).toBe("0x" + "abcd" + "00".repeat(30));
+            expect(hex).toBe(`0xabcd${"00".repeat(30)}`);
         });
 
         test("round-trips through hex encoding", () => {

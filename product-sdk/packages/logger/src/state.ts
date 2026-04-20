@@ -112,7 +112,7 @@ if (import.meta.vitest) {
             expect(ns!.has("tx")).toBe(true);
             expect(ns!.size).toBe(3);
         } finally {
-            delete process.env.PRODUCT_SDK_LOG_NS;
+            process.env.PRODUCT_SDK_LOG_NS = undefined;
         }
     });
 
@@ -121,7 +121,7 @@ if (import.meta.vitest) {
         try {
             expect(getInitialNamespaces()).toBeUndefined();
         } finally {
-            delete process.env.PRODUCT_SDK_LOG_NS;
+            process.env.PRODUCT_SDK_LOG_NS = undefined;
         }
     });
 
@@ -130,7 +130,7 @@ if (import.meta.vitest) {
         try {
             expect(getInitialLevel()).toBe("debug");
         } finally {
-            delete process.env.PRODUCT_SDK_LOG;
+            process.env.PRODUCT_SDK_LOG = undefined;
         }
     });
 

@@ -102,8 +102,7 @@ export async function createApp(config: AppConfig): Promise<App> {
             // For now, return a placeholder that will be replaced with real implementation
             log.debug("getClient called", { chain: chain.id });
             throw new Error(
-                `Chain client for ${chain.id} not yet implemented. ` +
-                    "PAPI integration requires additional setup.",
+                `Chain client for ${chain.id} not yet implemented. PAPI integration requires additional setup.`,
             );
         },
     };

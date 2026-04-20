@@ -42,7 +42,7 @@ function validateDecimals(decimals: number): void {
  * formatPlanck(0n);                     // "0.0"
  * ```
  */
-export function formatPlanck(planck: bigint, decimals: number = 10): string {
+export function formatPlanck(planck: bigint, decimals = 10): string {
     validateDecimals(decimals);
 
     if (planck < 0n) {
@@ -86,7 +86,7 @@ export function formatPlanck(planck: bigint, decimals: number = 10): string {
  * parseToPlanck("0.001", 12);  // 1_000_000_000n    (12 decimals)
  * ```
  */
-export function parseToPlanck(amount: string, decimals: number = 10): bigint {
+export function parseToPlanck(amount: string, decimals = 10): bigint {
     validateDecimals(decimals);
 
     if (amount === "") {

@@ -47,7 +47,7 @@ export function computeCid(data: Uint8Array): string {
     cidBytes.set(multihash, 2);
 
     // Encode as base32lower with 'b' prefix (multibase)
-    return "b" + base32Encode(cidBytes);
+    return `b${base32Encode(cidBytes)}`;
 }
 
 /**

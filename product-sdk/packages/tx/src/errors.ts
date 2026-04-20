@@ -12,8 +12,7 @@ export class TxTimeoutError extends TxError {
 
     constructor(timeoutMs: number) {
         super(
-            `Transaction timed out after ${timeoutMs / 1000}s. ` +
-                "The transaction may still be processing on-chain.",
+            `Transaction timed out after ${timeoutMs / 1000}s. The transaction may still be processing on-chain.`,
         );
         this.name = "TxTimeoutError";
         this.timeoutMs = timeoutMs;

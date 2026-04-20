@@ -77,8 +77,7 @@ export async function createTruApiProvider(
         log.warn("Failed to load product SDK, falling back", { error: e });
         if (!fallback) {
             throw new Error(
-                `Failed to load product SDK: ${e instanceof Error ? e.message : String(e)}. ` +
-                    "No fallback provider available.",
+                `Failed to load product SDK: ${e instanceof Error ? e.message : String(e)}. No fallback provider available.`,
             );
         }
         return fallback;

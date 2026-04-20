@@ -12,7 +12,7 @@ function hexToBytes(hex: string): Uint8Array {
     const clean = hex.startsWith("0x") ? hex.slice(2) : hex;
     const bytes = new Uint8Array(clean.length / 2);
     for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
+        bytes[i] = Number.parseInt(clean.slice(i * 2, i * 2 + 2), 16);
     }
     return bytes;
 }
@@ -144,7 +144,7 @@ if (import.meta.vitest) {
         });
 
         test("accepts hex string with 0x prefix", () => {
-            const hex = "0x" + "aa".repeat(64);
+            const hex = `0x${"aa".repeat(64)}`;
             const fromHex = KeyManager.fromSignature(hex, TEST_ADDR);
             const fromBytes = KeyManager.fromSignature(TEST_SIG, TEST_ADDR);
             expect(fromHex.exportKey()).toEqual(fromBytes.exportKey());

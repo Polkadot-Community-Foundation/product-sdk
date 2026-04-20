@@ -6,11 +6,7 @@
  * @param endChars - Characters to show at the end (default 4)
  * @returns Truncated string like "5Grwva...utQY"
  */
-export function truncateAddress(
-    address: string,
-    startChars: number = 6,
-    endChars: number = 4,
-): string {
+export function truncateAddress(address: string, startChars = 6, endChars = 4): string {
     if (!address) return "";
     const minLength = startChars + endChars + 3; // 3 for "..."
     if (address.length <= minLength) return address;

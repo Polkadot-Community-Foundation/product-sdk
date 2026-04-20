@@ -180,8 +180,7 @@ export function getClient(descriptor: ChainDefinition): PolkadotClient {
     const entry = findEntryByGenesis(genesis);
     if (!entry?.client) {
         throw new Error(
-            `Chain not connected (genesis: ${genesis}). ` +
-                `Call createChainClient() first to establish connections.`,
+            `Chain not connected (genesis: ${genesis}). Call createChainClient() first to establish connections.`,
         );
     }
     return entry.client;

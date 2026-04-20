@@ -28,7 +28,7 @@ const XCHACHA_NONCE_SIZE = 24;
  * @param length - Key length in bytes (default: 32 for AES-256)
  * @returns Random key bytes
  */
-export function generateKey(length: number = 32): Uint8Array {
+export function generateKey(length = 32): Uint8Array {
     return randomBytes(length);
 }
 

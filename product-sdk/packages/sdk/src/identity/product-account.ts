@@ -35,7 +35,7 @@ const log = createLogger("identity");
 export function deriveProductAccount(
     parentAddress: string,
     productName: string,
-    ss58Prefix: number = 42,
+    ss58Prefix = 42,
 ): ProductAccountInfo {
     const { publicKey: parentPublicKey } = ss58Decode(parentAddress);
 

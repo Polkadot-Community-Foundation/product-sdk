@@ -31,7 +31,7 @@ const DEFAULT_SCRYPT_P = 1;
  * @param length - Salt length in bytes (default: 16)
  * @returns Random salt
  */
-export function generateSalt(length: number = 16): Uint8Array {
+export function generateSalt(length = 16): Uint8Array {
     return randomBytes(length);
 }
 
@@ -65,7 +65,7 @@ export function deriveKey(
     password: string | Uint8Array,
     salt: Uint8Array,
     options: KdfOptions,
-    keyLength: number = 32,
+    keyLength = 32,
 ): Uint8Array {
     const passwordBytes =
         typeof password === "string" ? new TextEncoder().encode(password) : password;
@@ -161,7 +161,7 @@ export function deriveMultipleKeys(
     masterKey: Uint8Array,
     salt: Uint8Array,
     contexts: string[],
-    keyLength: number = 32,
+    keyLength = 32,
 ): Uint8Array[] {
     return contexts.map((context) =>
         deriveKey(masterKey, salt, { algorithm: "hkdf", info: context }, keyLength),
@@ -180,7 +180,7 @@ export function deriveMultipleKeys(
 export function deriveKeyWithSalt(
     password: string,
     options: KdfOptions,
-    keyLength: number = 32,
+    keyLength = 32,
 ): { key: Uint8Array; salt: Uint8Array } {
     const salt = generateSalt();
     const key = deriveKey(password, salt, options, keyLength);

@@ -28,8 +28,7 @@ export async function createProvider(
 
     if (!fallback) {
         throw new Error(
-            `No connection method available for chain ${genesisHash}. ` +
-                `Provide rpcs or chain specs.`,
+            `No connection method available for chain ${genesisHash}. Provide rpcs or chain specs.`,
         );
     }
     return fallback;
