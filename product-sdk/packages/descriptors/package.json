@@ -42,5 +42,10 @@
     "devDependencies": {
         "typescript": "^5.8.3"
     },
-    "files": ["chains/*/generated/dist/**/*.js", "chains/*/generated/dist/**/*.d.ts", "chains/*/generated/dist/**/*.mjs", "chains/*/.papi/**/*"]
+    "files": [
+        "chains/*/generated/dist/**/*.js",
+        "chains/*/generated/dist/**/*.d.ts",
+        "chains/*/generated/dist/**/*.mjs",
+        "chains/*/.papi/**/*"
+    ]
 }

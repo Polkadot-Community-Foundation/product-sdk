@@ -48,7 +48,9 @@ class HostTransport implements StatementTransport {
                 // sdk-statement expects Statement (hex string fields, { type } enums).
                 // Type assertion needed: store.subscribe callback types are unknown[] at the interface
                 // but actual runtime values are HostSignedStatement[].
-                const converted = (statements as HostSignedStatement[]).map(hostSignedStatementToSdk);
+                const converted = (statements as HostSignedStatement[]).map(
+                    hostSignedStatementToSdk,
+                );
                 onStatements(converted);
             });
 
