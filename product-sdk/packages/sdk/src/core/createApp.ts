@@ -14,18 +14,10 @@ import type {
     Account,
     ChainDescriptor,
 } from "./types.js";
-import { createLogger, configure } from "./logger.js";
-import { createKvStore } from "../storage/kv-store.js";
-import { WalletManager } from "../wallet/wallet.js";
-import { BulletinClient } from "../bulletin/client.js";
-import {
-    isInsideContainer,
-    getHostLocalStorage,
-    getAccountsProvider,
-    type AccountsProvider,
-    type HostLocalStorage,
-} from "../chain/container.js";
-import type { WalletAccount } from "../wallet/types.js";
+import { configure, createLogger } from "@parity/product-sdk-logger";
+import { createKvStore } from "@parity/product-sdk-storage";
+import { SignerManager } from "@parity/product-sdk-signer";
+import { BulletinClient, computeCid } from "@parity/product-sdk-bulletin";
 
 const log = createLogger("app");
 
@@ -39,9 +31,22 @@ const log = createLogger("app");
  * ```ts
  * import { createApp } from '@parity/product-sdk';
  *
+ * // Default: bulletin enabled with paseo environment
  * const app = await createApp({
  *   name: 'my-app',
  *   logLevel: 'info',
+ * });
+ *
+ * // Custom bulletin environment
+ * const prodApp = await createApp({
+ *   name: 'my-app',
+ *   bulletin: { environment: 'polkadot' },
+ * });
+ *
+ * // Disable bulletin entirely
+ * const noBulletinApp = await createApp({
+ *   name: 'my-app',
+ *   bulletin: false,
  * });
  *
  * // Connect wallet
@@ -50,8 +55,10 @@ const log = createLogger("app");
  * // Use storage
  * await app.storage.set('key', 'value');
  *
- * // Get chain client
- * const client = app.chain.getClient(chains.assetHub);
+ * // Use bulletin (check for null if it might be disabled)
+ * if (app.bulletin) {
+ *   const cid = await app.bulletin.upload('hello world');
+ * }
  * ```
  */
 export async function createApp(config: AppConfig): Promise<App> {
@@ -62,25 +69,27 @@ export async function createApp(config: AppConfig): Promise<App> {
 
     log.info("Creating Product SDK app", { name: config.name });
 
-    // Detect runtime environment
-    const inContainer = await isInsideContainer();
-    log.debug("Environment detection", { inContainer });
+    // Initialize storage (container-only - will throw if not in container)
+    const kvStore = await createKvStore({ prefix: config.name });
 
-    // Initialize storage
-    const hostLocalStorage = inContainer ? await getHostLocalStorage() : null;
-    const kvStore = await createKvStore({
-        prefix: config.name,
-        hostLocalStorage: hostLocalStorage ?? undefined,
+    // Initialize signer manager
+    const signerManager = new SignerManager({
+        dappName: config.name,
     });
 
-    // Initialize wallet manager
-    const walletManager = new WalletManager({ appName: config.name });
+    // Initialize bulletin client (configurable, defaults to paseo)
+    const bulletinEnabled = config.bulletin !== false;
+    const bulletinEnvironment =
+        typeof config.bulletin === "object" ? config.bulletin.environment : "paseo";
+    const bulletinClient = bulletinEnabled
+        ? await BulletinClient.create(bulletinEnvironment)
+        : null;
 
-    // Get accounts provider for container mode
-    const accountsProvider = inContainer ? await getAccountsProvider() : null;
-
-    // Initialize bulletin client (default to paseo for now)
-    const bulletinClient = new BulletinClient({ environment: "paseo" });
+    if (bulletinEnabled) {
+        log.debug("Bulletin client initialized", { environment: bulletinEnvironment });
+    } else {
+        log.debug("Bulletin client disabled");
+    }
 
     // Create storage API adapter
     const storageApi: StorageApi = {
@@ -89,37 +98,45 @@ export async function createApp(config: AppConfig): Promise<App> {
         getJSON: <T>(key: string) => kvStore.getJSON<T>(key),
         setJSON: <T>(key: string, value: T) => kvStore.setJSON(key, value),
         remove: (key) => kvStore.remove(key),
-        clear: () => kvStore.clear(),
+        clear: async () => {
+            // KvStore doesn't have clear - this is a no-op
+            log.debug("clear() is not supported in container storage mode");
+        },
     };
 
     // Create wallet API adapter
-    const walletApi = createWalletApi(walletManager, accountsProvider);
+    const walletApi = createWalletApi(signerManager);
 
     // Create chain API
     const chainApi: ChainApi = {
         getClient<T>(chain: ChainDescriptor<T>): T {
-            // TODO: Implement actual PAPI client creation
-            // For now, return a placeholder that will be replaced with real implementation
+            // TODO: Implement actual PAPI client creation via @parity/product-sdk-chain-client
             log.debug("getClient called", { chain: chain.id });
             throw new Error(
-                `Chain client for ${chain.id} not yet implemented. PAPI integration requires additional setup.`,
+                `Chain client for ${chain.id} not yet implemented. Use @parity/product-sdk-chain-client directly.`,
             );
         },
     };
 
-    // Create bulletin API adapter
-    const bulletinApi: BulletinApi = {
-        upload: async (data) => {
-            const result = await bulletinClient.upload(data);
-            return result.cid;
-        },
-        fetch: (cid) => bulletinClient.fetch(cid),
-        computeCid: (data) => bulletinClient.computeCid(data),
-    };
+    // Create bulletin API adapter (null if disabled)
+    const bulletinApi: BulletinApi | null = bulletinClient
+        ? {
+              upload: async (data) => {
+                  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+                  const result = await bulletinClient.upload(bytes);
+                  return result.cid;
+              },
+              fetch: (cid) => bulletinClient.fetchBytes(cid),
+              computeCid: (data) => {
+                  const bytes = typeof data === "string" ? new TextEncoder().encode(data) : data;
+                  return computeCid(bytes);
+              },
+          }
+        : null;
 
     log.info("Product SDK app created", {
         name: config.name,
-        mode: inContainer ? "container" : "standalone",
+        bulletin: bulletinEnabled ? bulletinEnvironment : "disabled",
     });
 
     return {
@@ -132,18 +149,21 @@ export async function createApp(config: AppConfig): Promise<App> {
 }
 
 /**
- * Create wallet API adapter that handles both container and standalone modes
+ * Create wallet API adapter using SignerManager from leaf package
  */
-function createWalletApi(
-    walletManager: WalletManager,
-    accountsProvider: AccountsProvider | null,
-): WalletApi {
+function createWalletApi(signerManager: SignerManager): WalletApi {
     // Track account change subscribers
     const accountChangeSubscribers = new Set<(account: Account | null) => void>();
 
-    // Subscribe to wallet manager state changes
-    walletManager.subscribe((state) => {
-        const account = state.selectedAccount ? toAccount(state.selectedAccount) : null;
+    // Subscribe to signer manager state changes
+    signerManager.subscribe((state) => {
+        const account = state.selectedAccount
+            ? {
+                  address: state.selectedAccount.address,
+                  name: state.selectedAccount.name ?? undefined,
+                  source: state.selectedAccount.source,
+              }
+            : null;
         for (const callback of accountChangeSubscribers) {
             try {
                 callback(account);
@@ -155,53 +175,52 @@ function createWalletApi(
 
     return {
         async connect(): Promise<{ accounts: Account[] }> {
-            // If we have an accounts provider (container mode), use it
-            if (accountsProvider) {
-                const truApiAccounts = await accountsProvider.getAccounts();
-                const accounts = truApiAccounts.map((a) => ({
-                    address: a.address,
-                    name: a.name,
-                    source: "host",
-                }));
-                return { accounts };
+            const result = await signerManager.connect();
+            if (!result.ok) {
+                throw new Error(result.error.message);
             }
-
-            // Otherwise, use the wallet manager for extension-based connection
-            const result = await walletManager.connect();
-            return { accounts: result.accounts.map(toAccount) };
+            return {
+                accounts: result.value.map((a) => ({
+                    address: a.address,
+                    name: a.name ?? undefined,
+                    source: a.source,
+                })),
+            };
         },
 
         async disconnect(): Promise<void> {
-            await walletManager.disconnect();
+            signerManager.disconnect();
         },
 
         getAccounts(): Account[] {
-            return walletManager.getAccounts().map(toAccount);
+            return signerManager.getState().accounts.map((a) => ({
+                address: a.address,
+                name: a.name ?? undefined,
+                source: a.source,
+            }));
         },
 
         getSelectedAccount(): Account | null {
-            const selected = walletManager.getSelectedAccount();
-            return selected ? toAccount(selected) : null;
+            const selected = signerManager.getState().selectedAccount;
+            if (!selected) return null;
+            return {
+                address: selected.address,
+                name: selected.name ?? undefined,
+                source: selected.source,
+            };
         },
 
         selectAccount(address: string): void {
-            walletManager.selectAccount(address);
+            signerManager.selectAccount(address);
         },
 
         async signMessage(message: string | Uint8Array): Promise<Uint8Array> {
             const bytes = typeof message === "string" ? new TextEncoder().encode(message) : message;
-
-            // If we have an accounts provider (container mode), use it for signing
-            if (accountsProvider) {
-                const selected = walletManager.getSelectedAccount();
-                if (!selected) {
-                    throw new Error("No account selected");
-                }
-                return accountsProvider.sign(selected.address, bytes);
+            const result = await signerManager.signRaw(bytes);
+            if (!result.ok) {
+                throw new Error(result.error.message);
             }
-
-            // Otherwise, use wallet manager
-            return walletManager.signMessage(bytes);
+            return result.value;
         },
 
         onAccountChange(callback: (account: Account | null) => void): () => void {
@@ -210,31 +229,29 @@ function createWalletApi(
         },
 
         getProductAccount(): Account | null {
-            const productAccount = walletManager.getProductAccount();
-            if (!productAccount) return null;
-            return {
-                address: productAccount.address,
-                source: "product",
-            };
+            // Product accounts require async call - this sync API can't support it properly
+            // Users should use SignerManager.getProductAccount() directly
+            log.warn(
+                "getProductAccount() is deprecated - use SignerManager.getProductAccount() directly",
+            );
+            return null;
         },
 
         getAnonymousAlias(): string | null {
-            return walletManager.getAnonymousAlias();
+            // Anonymous aliases require async call - this sync API can't support it properly
+            // Users should use SignerManager.getProductAccountAlias() directly
+            log.warn(
+                "getAnonymousAlias() is deprecated - use SignerManager.getProductAccountAlias() directly",
+            );
+            return null;
         },
 
-        async createProof(message: Uint8Array): Promise<Uint8Array> {
-            return walletManager.createProof(message);
+        async createProof(_message: Uint8Array): Promise<Uint8Array> {
+            // Ring VRF proofs require SignerManager.createRingVRFProof() directly
+            throw new Error(
+                "createProof() is not implemented in the App API. " +
+                    "Use SignerManager.createRingVRFProof() directly.",
+            );
         },
-    };
-}
-
-/**
- * Convert WalletAccount to Account
- */
-function toAccount(wa: WalletAccount): Account {
-    return {
-        address: wa.address,
-        name: wa.name ?? undefined,
-        source: wa.source,
     };
 }
