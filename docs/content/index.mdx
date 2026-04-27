@@ -1,0 +1,33 @@
+---
+title: Product SDK
+description: TypeScript SDK for building Polkadot apps that run inside a compatible host.
+---
+
+import { Hero } from "./_components/hero";
+import { FeatureGrid } from "./_components/feature-grid";
+
+<Hero />
+
+## Install
+
+```bash
+pnpm add @parity/product-sdk
+```
+
+## Who this is for
+
+You're building a Polkadot app that runs inside a host. That could be Polkadot Desktop, Polkadot Mobile, a web host like [dot.li](https://dot.li), or a custom host you're embedding the test SDK into. You want wallet, storage, and Bulletin access without hand-wiring PAPI clients, CID computation, and signer bridges for every project.
+
+`createApp` gives you that common surface in one call. The leaf packages cover everything else: PAPI chain clients, transaction submission and batching, key derivation, crypto primitives, ink! contract interactions, statement store pub/sub. Each leaf package works on its own, so you can install just the ones you need.
+
+For tooling or scripts that run outside a host (plain Node, a browser tab with no host around it), skip `createApp` and import leaf packages directly. `createApp` requires a host and will throw on boot without one.
+
+## What you get
+
+<FeatureGrid />
+
+## Where to go next
+
+- [Installation](/getting-started/installation): umbrella package, leaf packages, and environment requirements
+- [Quickstart](/getting-started/quickstart): connect the wallet and read storage in under 20 lines
+- [API Reference](/api): every exported class, function, and type across all packages
