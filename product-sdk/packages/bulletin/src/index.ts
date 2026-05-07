@@ -11,12 +11,12 @@
  * @packageDocumentation
  */
 
-// Our additions
 export { BulletinClient } from "./client.js";
 export type { CreateBulletinClientOptions } from "./client.js";
 export { BulletinChain } from "./networks.js";
 export type { BulletinEnvironment, BulletinNetwork } from "./networks.js";
-export { checkAuthorization } from "./authorization.js";
+export { authorizeAccount, checkAuthorization } from "./authorization.js";
+export type { AuthorizeAccountOptions } from "./authorization.js";
 export { createLazySigner } from "./lazy-signer.js";
 export { executeQuery, queryBytes, queryJson } from "./query.js";
 export { resolveQueryStrategy } from "./resolve-query.js";
