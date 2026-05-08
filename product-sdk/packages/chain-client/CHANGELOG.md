@@ -1,5 +1,12 @@
 # @parity/product-sdk-chain-client
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [6fc8188]
+  - @parity/product-sdk-descriptors@0.2.1
+
 ## 0.2.0
 
 ### Minor Changes
