@@ -1,5 +1,11 @@
 # @parity/product-sdk-keys
 
+## 0.2.1
+
+### Patch Changes
+
+- @parity/product-sdk-storage@0.1.2
+
 ## 0.2.0
 
 ### Minor Changes
