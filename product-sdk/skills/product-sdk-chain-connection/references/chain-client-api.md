@@ -11,11 +11,11 @@ async function getChainAPI<E extends Environment>(env: E): Promise<ChainClient<P
 ```
 
 **Parameters:**
-- `env` - Environment name: `"paseo"`, `"polkadot"`, or `"kusama"`
+- `env` - Environment name: `"paseo"`, `"previewnet"`, `"polkadot"`, or `"kusama"`
 
 **Returns:** A `ChainClient` with typed APIs for all chains in the environment.
 
-**Throws:** If the environment is not yet available (only `"paseo"` is currently supported).
+**Throws:** If the environment is not yet available (only `"paseo"` and `"previewnet"` are currently supported).
 
 ```typescript
 import { getChainAPI } from "@parity/product-sdk-chain-client";
@@ -54,12 +54,12 @@ async function createChainClient<C extends ChainMap>(config: ChainClientConfig<C
 ```typescript
 import { createChainClient } from "@parity/product-sdk-chain-client";
 import { paseo_asset_hub } from "@parity/product-sdk-descriptors/paseo-asset-hub";
-import { bulletin } from "@parity/product-sdk-descriptors/bulletin";
+import { paseo_bulletin } from "@parity/product-sdk-descriptors/paseo-bulletin";
 
 const client = await createChainClient({
     chains: {
         assetHub: paseo_asset_hub,
-        bulletin: bulletin,
+        bulletin: paseo_bulletin,
     },
     rpcs: {
         assetHub: ["wss://sys.ibp.network/asset-hub-paseo"],
@@ -167,7 +167,7 @@ const existentialDeposit = client.assetHub.constants.Balances.ExistentialDeposit
 ### Environment
 
 ```typescript
-type Environment = "polkadot" | "kusama" | "paseo";
+type Environment = "polkadot" | "kusama" | "paseo" | "previewnet";
 ```
 
 ### ChainMap
