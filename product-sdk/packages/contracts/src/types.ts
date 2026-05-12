@@ -37,7 +37,8 @@ export interface CdmJson {
 }
 
 // ---------------------------------------------------------------------------
-// ABI types (Solidity-compatible, used by both Ink!/PolkaVM and Solidity)
+// ABI types (Solidity-compatible — emitted by cargo-pvm-contract and any
+// Solidity toolchain targeting pallet-revive)
 // ---------------------------------------------------------------------------
 
 /** An ABI parameter or return value, with support for nested tuple and struct types. */
@@ -79,7 +80,11 @@ export interface Contracts {}
 export interface QueryResult<T> {
     success: boolean;
     value: T;
-    gasRequired?: bigint;
+    /**
+     * Weight required to execute this call as a transaction. Returned by
+     * `ReviveApi.call` and consumed by `Revive.call`'s `weight_limit`.
+     */
+    gasRequired?: Weight;
 }
 
 /** Options for query calls — passed as the last argument after positional args. */
@@ -173,13 +178,10 @@ export type Contract<C extends ContractDef> = {
          */
         tx: (...args: [...C["methods"][K]["args"], opts?: TxOptions]) => Promise<TxResult>;
         /**
-         * Prepare the method as a {@link BatchableCall} — returns a handle
-         * consumable by `batchSubmitAndWatch` from `@parity/product-sdk-tx`
-         * without signing or submitting.
-         *
-         * Use this to group multiple contract calls (or contract calls mixed
-         * with other transactions on the same chain) into a single atomic
-         * `Utility.batch_all` transaction:
+         * Prepare the method as a {@link BatchableCall} — returns the same
+         * submittable that `.tx()` would build, but without signing or
+         * submitting. Consumable directly by `batchSubmitAndWatch` from
+         * `@parity/product-sdk-tx`:
          *
          * ```ts
          * import { batchSubmitAndWatch } from "@parity/product-sdk-tx";
@@ -189,11 +191,18 @@ export type Contract<C extends ContractDef> = {
          * await batchSubmitAndWatch([a, b], api, signer);
          * ```
          *
-         * Origin is resolved the same way as `.tx()` but falls back to the
-         * dev address for dry-run gas estimation if no signer context is
-         * available (prepare does not require a signer; the batch submission
-         * does).
+         * Sizing: when either `gasLimit` or `storageDepositLimit` is
+         * omitted, `.prepare()` runs a `ReviveApi.call` dry-run (same as
+         * `.tx()`) against the dev fallback origin to fill the missing
+         * field(s) — pass both to skip the dry-run entirely. A failing
+         * dry-run throws {@link ContractDryRunFailedError} before the
+         * call is constructed.
+         *
+         * `.prepare()` does not require a signer; the batch's signer
+         * replaces the dispatched origin at submission.
          */
-        prepare: (...args: [...C["methods"][K]["args"], opts?: PrepareOptions]) => BatchableCall;
+        prepare: (
+            ...args: [...C["methods"][K]["args"], opts?: PrepareOptions]
+        ) => Promise<BatchableCall>;
     };
 };
