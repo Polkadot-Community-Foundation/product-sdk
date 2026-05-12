@@ -21,7 +21,7 @@ import cdmJson from "./cdm.json";
 
 const client = await createChainClient({
     chains: { assetHub: paseo_asset_hub },
-    rpcs: { assetHub: ["wss://asset-hub-paseo-rpc.n.dwellir.com"] },
+    rpcs: { assetHub: ["wss://paseo-asset-hub-next-rpc.polkadot.io"] },
 });
 
 const signerManager = new SignerManager();
@@ -140,8 +140,8 @@ Top-level shape:
 {
   "targets": {
     "<targetHash>": {
-      "asset-hub": "wss://asset-hub-paseo-rpc.n.dwellir.com",
-      "bulletin": "https://paseo-ipfs.polkadot.io/ipfs"
+      "asset-hub": "wss://paseo-asset-hub-next-rpc.polkadot.io",
+      "bulletin": "https://paseo-bulletin-next-ipfs.polkadot.io"
     }
   },
   "dependencies": {
