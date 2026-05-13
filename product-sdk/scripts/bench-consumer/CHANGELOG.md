@@ -1,5 +1,24 @@
 # @parity/product-sdk-bench-consumer
 
+## 0.0.5
+
+### Patch Changes
+
+- Updated dependencies [bdeb144]
+- Updated dependencies [bdeb144]
+- Updated dependencies [bdeb144]
+  - @parity/product-sdk@0.5.0
+  - @parity/product-sdk-contracts@0.5.0
+  - @parity/product-sdk-host@0.3.0
+  - @parity/product-sdk-terminal@0.2.1
+  - @parity/product-sdk-bulletin@0.4.1
+  - @parity/product-sdk-chain-client@0.4.1
+  - @parity/product-sdk-signer@0.2.4
+  - @parity/product-sdk-statement-store@0.2.3
+  - @parity/product-sdk-storage@0.1.4
+  - @parity/product-sdk-keys@0.2.3
+  - @parity/product-sdk-tx@0.2.3
+
 ## 0.0.4
 
 ### Patch Changes

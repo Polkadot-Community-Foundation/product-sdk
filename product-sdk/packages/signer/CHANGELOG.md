@@ -1,5 +1,13 @@
 # @parity/product-sdk-signer
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [bdeb144]
+  - @parity/product-sdk-host@0.3.0
+  - @parity/product-sdk-keys@0.2.3
+
 ## 0.2.3
 
 ### Patch Changes

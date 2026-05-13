@@ -1,5 +1,12 @@
 # @parity/product-sdk-chain-client
 
+## 0.4.1
+
+### Patch Changes
+
+- Updated dependencies [bdeb144]
+  - @parity/product-sdk-host@0.3.0
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,12 @@
 # @parity/product-sdk-storage
 
+## 0.1.4
+
+### Patch Changes
+
+- Updated dependencies [bdeb144]
+  - @parity/product-sdk-host@0.3.0
+
 ## 0.1.3
 
 ### Patch Changes
