@@ -247,9 +247,16 @@ export function wrapContract(
                     );
 
                     if (!dryRun.result.success) {
+                        // Pass the dispatch-error payload through. `value`
+                        // typically narrows as a tagged enum (e.g.
+                        // `{ type: "Module", value: ... }`,
+                        // `{ type: "ContractReverted" }`,
+                        // `{ type: "AccountNotMapped" }`) — callers inspect
+                        // its shape to learn why the call failed instead of
+                        // receiving a bare `undefined` with no signal.
                         return {
                             success: false,
-                            value: undefined,
+                            value: dryRun.result.value,
                             gasRequired: dryRun.weight_required,
                         };
                     }
