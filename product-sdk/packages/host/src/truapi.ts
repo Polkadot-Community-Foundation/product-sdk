@@ -15,9 +15,28 @@ import type {
     AllocatableResource as AllocatableResourceCodec,
     AllocationOutcome as AllocationOutcomeCodec,
     CodecType,
+    Statement as StatementCodec,
 } from "@novasamatech/host-api";
 
+import type { StatementProof } from "./types.js";
+
 const log = createLogger("host");
+
+/**
+ * Extract a human-readable message from an unknown error. `JSON.stringify`
+ * on `Error` returns `"{}"` because `message` and `stack` are non-enumerable
+ * — without this helper, wire failures surface as `"... failed: {}"` with
+ * zero diagnostic context.
+ */
+function formatError(err: unknown): string {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    try {
+        return JSON.stringify(err);
+    } catch {
+        return String(err);
+    }
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers from @novasamatech/host-api (re-exported from @novasamatech/scale)
@@ -258,7 +277,89 @@ export async function requestResourceAllocation(
     return await truApi.requestResourceAllocation(enumValue("v1", resources)).match(
         (envelope: { tag: "v1"; value: AllocationOutcome[] }) => envelope.value,
         (err: unknown) => {
-            throw new Error(`requestResourceAllocation failed: ${JSON.stringify(err)}`);
+            throw new Error(`requestResourceAllocation failed: ${formatError(err)}`, {
+                cause: err,
+            });
+        },
+    );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authorized Statement Store proof creation (RFC-10 §"Statement Store allowance")
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A Statement payload destined for the Statement Store. Matches the
+ * `pallet-statement` Statement structure.
+ *
+ * The optional `proof` field is the same {@link StatementProof} shape that
+ * {@link createProofAuthorized} returns: pass `undefined` here, call
+ * `createProofAuthorized` to obtain the proof, then attach it before
+ * submitting via `HostStatementStore.submit`. The `OnChain` variant of
+ * `StatementProof` is a chain-attestation reference; the `Sr25519` /
+ * `Ed25519` / `Ecdsa` variants are signing proofs.
+ *
+ * Derived from the upstream codec so structural changes surface as compile
+ * errors here, not runtime decode failures.
+ */
+export type Statement = CodecType<typeof StatementCodec>;
+
+/**
+ * Have the host sign a Statement using an allowance-bearing account it
+ * picks internally — RFC-10 §"Statement Store allowance".
+ *
+ * The product passes only the Statement payload; the host chooses the
+ * `//allowance//statement-store//{productId}` account that holds SSS
+ * allowance and signs with it. Allowance is provisioned implicitly on
+ * first use if the host hasn't already pre-allocated via
+ * {@link requestResourceAllocation}; products never see the signing
+ * account or its key material.
+ *
+ * Pairs with {@link getStatementStore}'s `submit`: call this to obtain
+ * a proof, attach it to the Statement, and submit the result.
+ *
+ * @param statement - The Statement to be signed.
+ * @returns The proof to attach before submitting.
+ * @throws If the host is unavailable or the host-side signing fails.
+ *
+ * @example
+ * ```ts
+ * import { createProofAuthorized, getStatementStore } from "@parity/product-sdk-host";
+ *
+ * const statement = {
+ *     proof: undefined,
+ *     decryptionKey: undefined,
+ *     expiry: undefined,
+ *     channel: undefined,
+ *     topics: [],
+ *     data: payload,
+ * };
+ * const proof = await createProofAuthorized(statement);
+ * const store = await getStatementStore();
+ * await store?.submit({ ...statement, proof });
+ * ```
+ *
+ * @remarks
+ * RFC-10 introduces this as a new, strictly additive TruAPI call. The
+ * pre-existing `HostStatementStore.createProof(accountId, statement)`
+ * surface stays available for products that own a non-allowance signing
+ * account; this wrapper is the sponsored-submission path.
+ */
+export async function createProofAuthorized(statement: Statement): Promise<StatementProof> {
+    const truApi = await getTruApi();
+    if (!truApi) {
+        throw new Error("createProofAuthorized: TruAPI unavailable");
+    }
+    log.debug("createProofAuthorized", {
+        topics: statement.topics.length,
+        dataLen: statement.data?.length ?? 0,
+    });
+
+    // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
+    return await truApi.statementStoreCreateProofAuthorized(enumValue("v1", statement)).match(
+        (envelope: { tag: "v1"; value: StatementProof }) => envelope.value,
+        (err: unknown) => {
+            throw new Error(`createProofAuthorized failed: ${formatError(err)}`, { cause: err });
         },
     );
 }
@@ -447,6 +548,25 @@ if (import.meta.vitest) {
             ).rejects.toThrow(/TruAPI unavailable/);
         } else {
             expect(typeof requestResourceAllocation).toBe("function");
+        }
+    });
+
+    test("createProofAuthorized throws when TruAPI is unavailable", async () => {
+        cachedTruApi = null;
+        const api = await getTruApi();
+        if (api === null) {
+            await expect(
+                createProofAuthorized({
+                    proof: undefined,
+                    decryptionKey: undefined,
+                    expiry: undefined,
+                    channel: undefined,
+                    topics: [],
+                    data: undefined,
+                }),
+            ).rejects.toThrow(/TruAPI unavailable/);
+        } else {
+            expect(typeof createProofAuthorized).toBe("function");
         }
     });
 }
