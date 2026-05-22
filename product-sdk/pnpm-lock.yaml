@@ -222,12 +222,12 @@ importers:
       '@parity/product-sdk-keys':
         specifier: workspace:*
         version: link:../../packages/keys
+      '@parity/product-sdk-local-storage':
+        specifier: workspace:*
+        version: link:../../packages/local-storage
       '@parity/product-sdk-signer':
         specifier: workspace:*
         version: link:../../packages/signer
-      '@parity/product-sdk-storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
     devDependencies:
       '@parity/host-api-test-sdk':
         specifier: 'catalog:'
@@ -325,12 +325,12 @@ importers:
       '@parity/product-sdk-host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@parity/product-sdk-local-storage':
+        specifier: workspace:*
+        version: link:../../packages/local-storage
       '@parity/product-sdk-signer':
         specifier: workspace:*
         version: link:../../packages/signer
-      '@parity/product-sdk-storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
     devDependencies:
       '@parity/host-api-test-sdk':
         specifier: 'catalog:'
@@ -559,9 +559,9 @@ importers:
       '@parity/product-sdk-crypto':
         specifier: workspace:*
         version: link:../crypto
-      '@parity/product-sdk-storage':
+      '@parity/product-sdk-local-storage':
         specifier: workspace:*
-        version: link:../storage
+        version: link:../local-storage
       '@polkadot-labs/hdkd':
         specifier: ^0.0.28
         version: 0.0.28
@@ -577,6 +577,22 @@ importers:
       scale-ts:
         specifier: ^1.6.1
         version: 1.6.1
+    devDependencies:
+      typescript:
+        specifier: ^5.7.0
+        version: 5.9.3
+      vitest:
+        specifier: ^3.0.0
+        version: 3.2.4(@types/node@25.6.0)
+
+  packages/local-storage:
+    dependencies:
+      '@parity/product-sdk-host':
+        specifier: workspace:*
+        version: link:../host
+      '@parity/product-sdk-logger':
+        specifier: workspace:*
+        version: link:../logger
     devDependencies:
       typescript:
         specifier: ^5.7.0
@@ -620,15 +636,15 @@ importers:
       '@parity/product-sdk-keys':
         specifier: workspace:*
         version: link:../keys
+      '@parity/product-sdk-local-storage':
+        specifier: workspace:*
+        version: link:../local-storage
       '@parity/product-sdk-logger':
         specifier: workspace:*
         version: link:../logger
       '@parity/product-sdk-signer':
         specifier: workspace:*
         version: link:../signer
-      '@parity/product-sdk-storage':
-        specifier: workspace:*
-        version: link:../storage
       '@parity/product-sdk-tx':
         specifier: workspace:*
         version: link:../tx
@@ -719,22 +735,6 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 'catalog:'
-        version: 3.2.4(@types/node@25.6.0)
-
-  packages/storage:
-    dependencies:
-      '@parity/product-sdk-host':
-        specifier: workspace:*
-        version: link:../host
-      '@parity/product-sdk-logger':
-        specifier: workspace:*
-        version: link:../logger
-    devDependencies:
-      typescript:
-        specifier: ^5.7.0
-        version: 5.9.3
-      vitest:
-        specifier: ^3.0.0
         version: 3.2.4(@types/node@25.6.0)
 
   packages/terminal:
@@ -868,6 +868,9 @@ importers:
       '@parity/product-sdk-keys':
         specifier: workspace:*
         version: link:../../packages/keys
+      '@parity/product-sdk-local-storage':
+        specifier: workspace:*
+        version: link:../../packages/local-storage
       '@parity/product-sdk-logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -877,9 +880,6 @@ importers:
       '@parity/product-sdk-statement-store':
         specifier: workspace:*
         version: link:../../packages/statement-store
-      '@parity/product-sdk-storage':
-        specifier: workspace:*
-        version: link:../../packages/storage
       '@parity/product-sdk-terminal':
         specifier: workspace:*
         version: link:../../packages/terminal
