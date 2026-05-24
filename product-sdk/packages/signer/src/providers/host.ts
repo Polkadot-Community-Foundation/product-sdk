@@ -100,6 +100,22 @@ interface NeverthrowResultAsync<T, E> {
     match: <A, B = A>(ok: (t: T) => A, err: (e: E) => B) => Promise<A | B>;
 }
 
+/**
+ * Pin product-account signing to Nova's `host_create_transaction` path.
+ *
+ * The `createTransaction` path forwards opaque signed-extension bytes to
+ * the host for metadata-driven decoding, so unknown extensions (e.g.
+ * `AsPgas` on Paseo Next) survive end-to-end. The alternate
+ * `"signPayload"` path wraps via PJS and throws
+ * `"PJS does not support this signed-extension: AsPgas"` on those chains.
+ *
+ * Nova's `host-api-wrapper@0.7.9` already defaults to `"createTransaction"`,
+ * so this is a defensive pin rather than an opt-in — it guards against a
+ * future upstream default flip and makes the routing legible at the call
+ * site. The legacy-account signer doesn't expose this switch.
+ */
+const PRODUCT_SIGNER_TYPE = "createTransaction" as const;
+
 /** @internal */
 export interface AccountsProvider {
     getLegacyAccounts: () => NeverthrowResultAsync<RawAccount[], unknown>;
@@ -108,7 +124,10 @@ export interface AccountsProvider {
         dotNsIdentifier: string,
         derivationIndex?: number,
     ) => NeverthrowResultAsync<RawAccount, unknown>;
-    getProductAccountSigner: (account: ProductAccount) => import("polkadot-api").PolkadotSigner;
+    getProductAccountSigner: (
+        account: ProductAccount,
+        signerType?: "signPayload" | "createTransaction",
+    ) => import("polkadot-api").PolkadotSigner;
     getProductAccountAlias: (
         dotNsIdentifier: string,
         derivationIndex?: number,
@@ -284,7 +303,10 @@ export class HostProvider implements SignerProvider {
                     if (!this.accountsProvider) {
                         throw new Error("Host provider is disconnected");
                     }
-                    return this.accountsProvider.getProductAccountSigner(productAccount);
+                    return this.accountsProvider.getProductAccountSigner(
+                        productAccount,
+                        PRODUCT_SIGNER_TYPE,
+                    );
                 },
             });
         } catch (cause) {
@@ -302,12 +324,18 @@ export class HostProvider implements SignerProvider {
      *
      * Convenience method for when you already have the product account details.
      * Requires a prior successful `connect()` call.
+     *
+     * Routing is pinned to `signerType: "createTransaction"` via
+     * {@link PRODUCT_SIGNER_TYPE} so unknown signed extensions (e.g. `AsPgas`
+     * on Paseo Next) are forwarded to the host as opaque bytes for
+     * metadata-driven decoding, rather than going through the PJS bridge
+     * that throws on unknown extensions.
      */
     getProductAccountSigner(account: ProductAccount): import("polkadot-api").PolkadotSigner {
         if (!this.accountsProvider) {
             throw new Error("Host provider is not connected");
         }
-        return this.accountsProvider.getProductAccountSigner(account);
+        return this.accountsProvider.getProductAccountSigner(account, PRODUCT_SIGNER_TYPE);
     }
 
     /**
@@ -722,6 +750,45 @@ if (import.meta.vitest) {
                 expect(result.value[0].source).toBe("host");
                 expect(result.value[0].publicKey).toEqual(rawAccounts[0].publicKey);
                 expect(result.value[1].name).toBeNull();
+            }
+        });
+
+        test("getProductAccountSigner pins signerType to 'createTransaction'", async () => {
+            // Regression guard: the alternate "signPayload" route goes through
+            // PJS and throws on unknown signed extensions (e.g. AsPgas on
+            // Paseo Next). If a future refactor drops the explicit pin and
+            // upstream's default ever flips back to signPayload, this would
+            // silently regress.
+            const rawAccounts: RawAccountTest[] = [
+                { publicKey: new Uint8Array(32).fill(0xaa), name: "Alice" },
+            ];
+            const mockProvider = createMockProvider({ accounts: rawAccounts });
+            const provider = new HostProvider({
+                maxRetries: 1,
+                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+            });
+            await provider.connect();
+
+            // Path 1: HostProvider.getProductAccountSigner(...)
+            provider.getProductAccountSigner({
+                dotNsIdentifier: "test.dot",
+                derivationIndex: 0,
+                publicKey: rawAccounts[0].publicKey,
+            });
+            expect(mockProvider.getProductAccountSigner).toHaveBeenLastCalledWith(
+                expect.anything(),
+                "createTransaction",
+            );
+
+            // Path 2: getSigner() returned from HostProvider.getProductAccount(...)
+            const productAccountResult = await provider.getProductAccount("test.dot", 0);
+            expect(productAccountResult.ok).toBe(true);
+            if (productAccountResult.ok) {
+                productAccountResult.value.getSigner();
+                expect(mockProvider.getProductAccountSigner).toHaveBeenLastCalledWith(
+                    expect.anything(),
+                    "createTransaction",
+                );
             }
         });
 
