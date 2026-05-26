@@ -1,5 +1,127 @@
 # @parity/product-sdk
 
+## 0.7.0
+
+### Minor Changes
+
+- 7610e61: ### `@parity/product-sdk-host`
+
+  - New wrappers: `getChatManager`, `getThemeProvider`, `deriveEntropy`, `requestPermission`, `requestDevicePermission`.
+  - New container helpers: `createHostLocalStorage`.
+  - New TruAPI re-exports: `createHostPreimageManager`, `formatHostError`.
+  - New type re-exports: `ProductAccountId`, `SignedStatement`, `Statement`, `Topic`, `ChatManager`, `ChatMessageContent`, `ChatReceivedAction`, `ChatRoom`, `ChatRoomRegistrationResult`, `ChatBotRegistrationResult`, `ChatCustomMessageRenderer`, `ChatCustomMessageRendererParams`, `ThemeMode`, `ThemeProvider`, `DevicePermissionKind`, `RemotePermissionItem`.
+
+  ### `@parity/product-sdk-chain-client`
+
+  - New exports: `WellKnownChain` constant + `WellKnownChainHash` type for canonical genesis-hash lookups.
+
+  ### `@parity/product-sdk-local-storage`
+
+  - Widened the typed KV interface to match the upstream Novasama surface: `readBytes` / `writeBytes` methods and keyed `clear(key)`. Test mocks updated accordingly.
+
+  ### Umbrella
+
+  - `@parity/product-sdk`: minor cascade per `RELEASES.md` — any constituent minor bump cascades the umbrella.
+
+  No consumer-facing source-compat breaks: all changes are additive expansions of public exports.
+
+- 7610e61: **Drop previewnet support.**
+
+  Previewnet is no longer used. Removed across the workspace:
+
+  - `@parity/product-sdk-descriptors` drops the `./previewnet-asset-hub`, `./previewnet-bulletin`, and `./previewnet-individuality` subpath exports.
+  - `@parity/product-sdk-chain-client` removes `"previewnet"` from the `Environment` union; `getChainAPI("previewnet")` no longer compiles or resolves.
+  - `@parity/product-sdk-cloud-storage` removes the `previewnet` entry from `CloudStorageNetworks`.
+  - `@parity/product-sdk-host` removes `BULLETIN_RPCS.previewnet`.
+
+  ### Migration
+
+  Consumers using paseo (testnet) or one of the production environments are unaffected. Anyone importing a `previewnet-*` descriptor or referencing `Environment === "previewnet"` should drop the references — the underlying runtime is shared with paseo, so paseo is the direct replacement for testing.
+
+  Pre-1.0 breaking change per `RELEASES.md`; ships as `minor`.
+
+- 7610e61: **Add `getPaymentManager` for RFC-0006 host payments.**
+
+  `@parity/product-sdk-host` now exports `getPaymentManager()` plus the `PaymentManager`, `PaymentBalance`, `PaymentStatus`, and `TopUpSource` types. The wrapper returns the shared `paymentManager` singleton from `@novasamatech/host-api-wrapper`, matching the singleton pattern already used by `getPreimageManager`, `getHostLocalStorage`, and `getAccountsProvider`.
+
+  Closes the last `@novasamatech/host-api-wrapper` direct-import in the host-playground migration: callers can swap `createPaymentManager()` for `await getPaymentManager()`.
+
+  Distinct from the CoinPayment / merchant-payments surface (RFC-0017). This is the user-initiated balance / top-up / payment-request flow.
+
+- 7610e61: **Track upstream rename: `@novasamatech/product-sdk` → `@novasamatech/host-api-wrapper`.**
+
+  Novasama renamed their host-API wrapper package from `@novasamatech/product-sdk` to `@novasamatech/host-api-wrapper`. The first release under the new name is `0.7.9-6` (a prerelease).
+
+  ### What changed for consumers
+
+  If you install `@parity/product-sdk-host`, `@parity/product-sdk-signer`, or `@parity/product-sdk-statement-store` and were previously satisfying their optional peer dependency on `@novasamatech/product-sdk` manually, switch your direct install to `@novasamatech/host-api-wrapper` instead:
+
+  ```diff
+  - "@novasamatech/product-sdk": "^0.7.8"
+  + "@novasamatech/host-api-wrapper": "0.7.9-6"
+  ```
+
+  Same upstream package, same exports (`hostApi`, `createAccountsProvider`, `preimageManager`, `hostLocalStorage`, etc.) — only the npm package name changed.
+
+  If you don't install the peer directly (i.e. your bundle ships without the host-side wrapper), no action needed.
+
+  ### Catalog pin rationale
+
+  The new package is currently only published as `0.7.9-6` (a prerelease). The catalog is pinned to exactly `0.7.9-6` rather than `^0.7.9-6` because prerelease ranges have surprising semver semantics and prereleases can be republished. The pin will move to `^0.7.9` once a stable lands; the catalog auto-bumper (`product-sdk-deps-check.yml`) will pick that up automatically.
+
+  ### Why minor
+
+  Renaming an optional peer dependency is a consumer-visible change: anyone who satisfies our peer manually needs to update their own install. Per `RELEASES.md`'s pre-1.0 convention, that ships as `minor`.
+
+- 7610e61: Rename `@parity/product-sdk-bulletin` to `@parity/product-sdk-cloud-storage` and abstract the public surface away from chain-specific naming. The package is still backed by the Polkadot Bulletin Chain — the rename only affects user-facing types, methods, and configuration so callsites no longer need to know about the underlying implementation.
+
+  ### Migration
+
+  | Before                                 | After                               |
+  | -------------------------------------- | ----------------------------------- |
+  | `@parity/product-sdk-bulletin`         | `@parity/product-sdk-cloud-storage` |
+  | `BulletinClient`                       | `CloudStorageClient`                |
+  | `BulletinApi`                          | `CloudStorageApi`                   |
+  | `BulletinChain` (preset record)        | `CloudStorageNetworks`              |
+  | `BulletinNetwork` (interface)          | `CloudStorageNetwork`               |
+  | `BulletinEnvironment`                  | `CloudStorageEnvironment`           |
+  | `CreateBulletinClientOptions`          | `CreateCloudStorageClientOptions`   |
+  | `ProductBulletinError`                 | `ProductCloudStorageError`          |
+  | `Bulletin*Error` family (our errors)   | `CloudStorage*Error`                |
+  | `app.bulletin`                         | `app.cloudStorage`                  |
+  | `bulletin?:` config                    | `cloudStorage?:`                    |
+  | `@parity/product-sdk/bulletin` subpath | `@parity/product-sdk/cloud-storage` |
+
+  Upstream re-exports from `@parity/bulletin-sdk` (`AsyncBulletinClient`, `BulletinPreparer`, `MockBulletinClient`, `BulletinClientInterface`, `BulletinTypedApi`, `BulletinError`, `ErrorCode`) remain available on the public surface for power users.
+
+  Chain-level identifiers (`chains.bulletin`, `@parity/product-sdk-descriptors/bulletin`, the `paseo` environment) keep their existing names — those packages are explicitly about the chain, not the storage abstraction.
+
+### Patch Changes
+
+- 7610e61: **Bump `@novasamatech/host-api-wrapper` and `@novasamatech/host-api` to `^0.7.9` (stable).**
+
+  `0.7.9` is the first stable release on the `0.7.9` line. The previous catalog pinned the `0.7.9-6` prerelease exactly (no caret); this bump relaxes both entries to `^0.7.9` so the auto-bumper (`product-sdk-deps-check.yml`) can pick up future patch releases automatically.
+
+  No source-level changes for consumers — `0.7.9` is the same API surface as the prereleases we were already shipping against.
+
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+  - @parity/product-sdk-host@0.5.0
+  - @parity/product-sdk-chain-client@0.5.0
+  - @parity/product-sdk-local-storage@0.2.0
+  - @parity/product-sdk-signer@0.4.0
+  - @parity/product-sdk-contracts@0.6.0
+  - @parity/product-sdk-cloud-storage@0.5.0
+  - @parity/product-sdk-keys@0.3.1
+  - @parity/product-sdk-tx@0.2.5
+
 ## 0.6.0
 
 ### Minor Changes

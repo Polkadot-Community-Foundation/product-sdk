@@ -1,5 +1,60 @@
 # @parity/product-sdk-bulletin
 
+## 0.5.0
+
+### Minor Changes
+
+- 7610e61: **Drop previewnet support.**
+
+  Previewnet is no longer used. Removed across the workspace:
+
+  - `@parity/product-sdk-descriptors` drops the `./previewnet-asset-hub`, `./previewnet-bulletin`, and `./previewnet-individuality` subpath exports.
+  - `@parity/product-sdk-chain-client` removes `"previewnet"` from the `Environment` union; `getChainAPI("previewnet")` no longer compiles or resolves.
+  - `@parity/product-sdk-cloud-storage` removes the `previewnet` entry from `CloudStorageNetworks`.
+  - `@parity/product-sdk-host` removes `BULLETIN_RPCS.previewnet`.
+
+  ### Migration
+
+  Consumers using paseo (testnet) or one of the production environments are unaffected. Anyone importing a `previewnet-*` descriptor or referencing `Environment === "previewnet"` should drop the references — the underlying runtime is shared with paseo, so paseo is the direct replacement for testing.
+
+  Pre-1.0 breaking change per `RELEASES.md`; ships as `minor`.
+
+- 7610e61: Rename `@parity/product-sdk-bulletin` to `@parity/product-sdk-cloud-storage` and abstract the public surface away from chain-specific naming. The package is still backed by the Polkadot Bulletin Chain — the rename only affects user-facing types, methods, and configuration so callsites no longer need to know about the underlying implementation.
+
+  ### Migration
+
+  | Before                                 | After                               |
+  | -------------------------------------- | ----------------------------------- |
+  | `@parity/product-sdk-bulletin`         | `@parity/product-sdk-cloud-storage` |
+  | `BulletinClient`                       | `CloudStorageClient`                |
+  | `BulletinApi`                          | `CloudStorageApi`                   |
+  | `BulletinChain` (preset record)        | `CloudStorageNetworks`              |
+  | `BulletinNetwork` (interface)          | `CloudStorageNetwork`               |
+  | `BulletinEnvironment`                  | `CloudStorageEnvironment`           |
+  | `CreateBulletinClientOptions`          | `CreateCloudStorageClientOptions`   |
+  | `ProductBulletinError`                 | `ProductCloudStorageError`          |
+  | `Bulletin*Error` family (our errors)   | `CloudStorage*Error`                |
+  | `app.bulletin`                         | `app.cloudStorage`                  |
+  | `bulletin?:` config                    | `cloudStorage?:`                    |
+  | `@parity/product-sdk/bulletin` subpath | `@parity/product-sdk/cloud-storage` |
+
+  Upstream re-exports from `@parity/bulletin-sdk` (`AsyncBulletinClient`, `BulletinPreparer`, `MockBulletinClient`, `BulletinClientInterface`, `BulletinTypedApi`, `BulletinError`, `ErrorCode`) remain available on the public surface for power users.
+
+  Chain-level identifiers (`chains.bulletin`, `@parity/product-sdk-descriptors/bulletin`, the `paseo` environment) keep their existing names — those packages are explicitly about the chain, not the storage abstraction.
+
+### Patch Changes
+
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+- Updated dependencies [7610e61]
+  - @parity/product-sdk-host@0.5.0
+  - @parity/product-sdk-chain-client@0.5.0
+  - @parity/product-sdk-descriptors@0.5.0
+  - @parity/product-sdk-tx@0.2.5
+
 ## 0.4.2
 
 ### Patch Changes
