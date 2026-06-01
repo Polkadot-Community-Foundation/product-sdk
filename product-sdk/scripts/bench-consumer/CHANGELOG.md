@@ -1,5 +1,13 @@
 # @parity/product-sdk-bench-consumer
 
+## 0.0.9
+
+### Patch Changes
+
+- Updated dependencies [2498950]
+  - @parity/product-sdk-contracts@0.6.1
+  - @parity/product-sdk@0.7.2
+
 ## 0.0.8
 
 ### Patch Changes

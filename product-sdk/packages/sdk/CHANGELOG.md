@@ -1,5 +1,12 @@
 # @parity/product-sdk
 
+## 0.7.2
+
+### Patch Changes
+
+- Updated dependencies [2498950]
+  - @parity/product-sdk-contracts@0.6.1
+
 ## 0.7.1
 
 ### Patch Changes
