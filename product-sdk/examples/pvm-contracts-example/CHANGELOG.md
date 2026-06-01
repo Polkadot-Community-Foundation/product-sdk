@@ -1,5 +1,11 @@
 # @parity/product-sdk-pvm-contracts-example
 
+## 0.0.7
+
+### Patch Changes
+
+- @parity/product-sdk-contracts@0.6.2
+
 ## 0.0.6
 
 ### Patch Changes
