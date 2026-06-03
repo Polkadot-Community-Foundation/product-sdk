@@ -20,7 +20,6 @@ import cdmJson from "./cdm.json";
 
 const client = await createChainClient({
     chains: { assetHub: paseo_asset_hub },
-    rpcs: { assetHub: ["wss://paseo-asset-hub-next-rpc.polkadot.io"] },
 });
 
 const manager = ContractManager.fromClient(cdmJson, client.raw.assetHub, paseo_asset_hub, {
@@ -54,7 +53,6 @@ const abi = [
 
 const client = await createChainClient({
     chains: { assetHub: paseo_asset_hub },
-    rpcs: { assetHub: ["wss://paseo-asset-hub-next-rpc.polkadot.io"] },
 });
 
 const counter = createContractFromClient(

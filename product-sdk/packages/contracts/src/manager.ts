@@ -198,7 +198,6 @@ export async function withLiveContractAddresses(
  *
  * const client = await createChainClient({
  *     chains: { assetHub: paseo_asset_hub },
- *     rpcs: { assetHub: ["wss://paseo-asset-hub-next-rpc.polkadot.io"] },
  * });
  * const runtime = createContractRuntime(client.assetHub);
  * const manager = new ContractManager(cdmJson, runtime, {
