@@ -1,5 +1,80 @@
 # @parity/product-sdk-chain-client
 
+## 0.6.0
+
+### Minor Changes
+
+- f6bdaaf: **Remove the unused `rpcs` field from `ChainClientConfig`.**
+
+  `createChainClient` routed every connection through the host provider, so
+  the `rpcs` endpoints were never read at runtime — the field only forced
+  callers to construct and pass a no-op argument. It has been removed, and
+  `createChainClient({ chains })` is now the full config shape. The internal
+  preset RPC table and the dead `getChainAPI` wiring that fed it were dropped
+  as well.
+
+  **Breaking:** callers that passed `rpcs: {...}` will hit a TypeScript
+  excess-property error and must delete that key. There is no runtime behavior
+  change — the field carried no effect.
+
+  ```diff
+   const client = await createChainClient({
+       chains: { assetHub: paseo_asset_hub },
+  -    rpcs: { assetHub: ["wss://paseo-asset-hub-next-rpc.polkadot.io"] },
+   });
+  ```
+
+- f6bdaaf: **Surface a catchable error when the host doesn't support a chain, instead of hanging forever.**
+
+  Previously, connecting to a chain the host doesn't recognize (e.g. not enabled
+  in the current Desktop/Browser build, or a descriptor genesis hash that drifted
+  after a network reset) produced a provider whose JSON-RPC requests were silently
+  dropped. Every query against that chain then awaited indefinitely — no rejection,
+  no error, no built-in timeout.
+
+  `getHostProvider` now verifies host support (via the same `host_feature_supported`
+  check the wrapper performs internally) _before_ handing a provider to PAPI, and
+  throws the new `ChainNotSupportedError` (carrying the offending `genesisHash`) when
+  the host can't serve the chain.
+
+  `createChainClient` degrades per-chain rather than all-or-nothing: supported chains
+  in the same call stay fully usable, and an unsupported chain's API throws
+  `ChainNotSupportedError` on first use (e.g. `client.assetHub.query…`) instead of
+  hanging. This matches the reported behaviour where one chain (Bulletin) keeps
+  working while another is unavailable. A hard failure (e.g. not running inside a
+  container) still rejects the whole call as before.
+
+  ```ts
+  import {
+    createChainClient,
+    ChainNotSupportedError,
+  } from "@parity/product-sdk-chain-client";
+
+  const client = await createChainClient({
+    chains: { assetHub: paseo_asset_hub, bulletin: paseo_bulletin },
+  });
+
+  try {
+    await client.assetHub.query.System.Number.getValue();
+  } catch (err) {
+    if (err instanceof ChainNotSupportedError) {
+      // err.genesisHash — the chain the host refused
+    }
+  }
+
+  // Other chains in the same client are unaffected:
+  await client.bulletin.query.TransactionStorage.ByteFee.getValue();
+  ```
+
+  `ChainNotSupportedError` is exported from both `@parity/product-sdk-host` and
+  `@parity/product-sdk-chain-client`. Connecting outside a host container still
+  returns `null` / throws the existing "host provider unavailable" error.
+
+### Patch Changes
+
+- Updated dependencies [f6bdaaf]
+  - @parity/product-sdk-host@0.7.0
+
 ## 0.5.3
 
 ### Patch Changes
