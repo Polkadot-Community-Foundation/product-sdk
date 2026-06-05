@@ -1,5 +1,12 @@
 # @parity/product-sdk-local-storage
 
+## 0.2.4
+
+### Patch Changes
+
+- Updated dependencies [d4bc935]
+  - @parity/product-sdk-host@0.7.1
+
 ## 0.2.3
 
 ### Patch Changes

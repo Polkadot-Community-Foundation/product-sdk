@@ -1,5 +1,19 @@
 # @parity/product-sdk
 
+## 0.10.1
+
+### Patch Changes
+
+- Updated dependencies [d4bc935]
+  - @parity/product-sdk-host@0.7.1
+  - @parity/product-sdk-signer@0.6.2
+  - @parity/product-sdk-chain-client@0.6.1
+  - @parity/product-sdk-cloud-storage@0.5.5
+  - @parity/product-sdk-local-storage@0.2.4
+  - @parity/product-sdk-contracts@0.7.2
+  - @parity/product-sdk-keys@0.3.5
+  - @parity/product-sdk-tx@0.2.9
+
 ## 0.10.0
 
 ### Minor Changes
