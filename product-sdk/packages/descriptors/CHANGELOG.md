@@ -1,5 +1,23 @@
 # @parity/product-sdk-descriptors
 
+## 0.6.0
+
+### Minor Changes
+
+- a2fd276: **Add the Summit Network (Web3 Summit) as a new environment.**
+
+  Adds `summit-asset-hub`, `summit-bulletin`, and `summit-individuality`
+  (the People chain) descriptors, and wires `summit` through the host
+  Bulletin RPC list, the cloud-storage network preset, and
+  `getChainAPI("summit")`. Purely additive — no existing environment,
+  descriptor, or endpoint changes.
+
+### Patch Changes
+
+- a2fd276: **Regenerate paseo-asset-hub and paseo-individuality descriptors against current runtimes.**
+
+  The auto-drift workflow flagged both chains as stale against their live `codeHash`. Regenerated `.papi/metadata/*.scale` blobs and rebuilt bindings against the live runtimes — no public API or decode-shape change reached consumer packages (workspace build + full test suite clean against the regenerated bindings).
+
 ## 0.5.2
 
 ### Patch Changes

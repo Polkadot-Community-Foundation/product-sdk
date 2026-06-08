@@ -1,5 +1,11 @@
 # @parity/product-sdk-tx
 
+## 0.2.10
+
+### Patch Changes
+
+- @parity/product-sdk-keys@0.3.6
+
 ## 0.2.9
 
 ### Patch Changes

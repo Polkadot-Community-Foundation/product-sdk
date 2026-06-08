@@ -1,5 +1,29 @@
 # @parity/product-sdk
 
+## 0.11.0
+
+### Minor Changes
+
+- a2fd276: **Add the Summit Network (Web3 Summit) as a new environment.**
+
+  Adds `summit-asset-hub`, `summit-bulletin`, and `summit-individuality`
+  (the People chain) descriptors, and wires `summit` through the host
+  Bulletin RPC list, the cloud-storage network preset, and
+  `getChainAPI("summit")`. Purely additive — no existing environment,
+  descriptor, or endpoint changes.
+
+### Patch Changes
+
+- Updated dependencies [a2fd276]
+  - @parity/product-sdk-host@0.8.0
+  - @parity/product-sdk-cloud-storage@0.6.0
+  - @parity/product-sdk-chain-client@0.7.0
+  - @parity/product-sdk-local-storage@0.2.5
+  - @parity/product-sdk-signer@0.6.3
+  - @parity/product-sdk-keys@0.3.6
+  - @parity/product-sdk-contracts@0.7.3
+  - @parity/product-sdk-tx@0.2.10
+
 ## 0.10.1
 
 ### Patch Changes
