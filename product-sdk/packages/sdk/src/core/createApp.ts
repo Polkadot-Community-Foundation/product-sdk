@@ -30,6 +30,12 @@ import {
     isConnected,
     destroyAll,
 } from "@parity/product-sdk-chain-client";
+import { getAccountsProvider } from "@parity/product-sdk-host";
+import {
+    accountIdHexToBytes,
+    type PeopleUsernameQueryApi,
+    resolvePeopleUsernameOwner,
+} from "../identity/dotns.js";
 
 const log = createLogger("app");
 
@@ -277,6 +283,61 @@ function createWalletApi(signerManager: SignerManager): WalletApi {
             return result.value;
         },
 
+        async signMessageWithDotNsIdentity(args) {
+            const message =
+                typeof args.message === "string"
+                    ? new TextEncoder().encode(args.message)
+                    : args.message;
+            const accountsProvider = await getHostAccountsProvider();
+            const username = args.username ?? (await getPrimaryUsername(accountsProvider));
+
+            // Reuse an already-connected People chain when the caller has
+            // wired one up via `app.chain.connect({ ..., <name>: peopleChain })`.
+            // Fall back to opening a transient connection so first-time users
+            // don't have to think about chain lifecycles. The chain-client
+            // module caches by genesis fingerprint, so subsequent
+            // signMessageWithDotNsIdentity calls share whichever connection
+            // got established first.
+            const peopleClient = isConnected(args.peopleChain)
+                ? getClient(args.peopleChain)
+                : await createChainClient({ chains: { people: args.peopleChain } }).then(
+                      (c) => c.raw.people,
+                  );
+            // PAPI's `TypedApi.query.X.Y.getValue` is variadic
+            // (`...args: [...WithCallOptions<Args>]`) so it's not assignable
+            // to our deliberately-narrow `(key) => Promise<...>` shape. The
+            // resolver only ever passes the storage key; the cast adapts the
+            // wider PAPI surface to the minimum we depend on.
+            const peopleApi = peopleClient.getTypedApi(
+                args.peopleChain,
+            ) as unknown as PeopleUsernameQueryApi;
+            const accountId = await resolvePeopleUsernameOwner(username, peopleApi);
+            if (!accountId) {
+                throw new Error(`No account owns DotNS username "${username}"`);
+            }
+
+            const owner = accountIdHexToBytes(accountId);
+            const signer = accountsProvider.getLegacyAccountSigner({
+                publicKey: owner,
+                name: username,
+            });
+
+            try {
+                return {
+                    username,
+                    accountId,
+                    signature: await signer.signBytes(message),
+                };
+            } catch (cause) {
+                throw new Error(
+                    `Failed to sign with DotNS username "${username}": ${
+                        cause instanceof Error ? cause.message : String(cause)
+                    }`,
+                    { cause },
+                );
+            }
+        },
+
         onAccountChange(callback: (account: Account | null) => void): () => void {
             accountChangeSubscribers.add(callback);
             return () => accountChangeSubscribers.delete(callback);
@@ -308,4 +369,28 @@ function createWalletApi(signerManager: SignerManager): WalletApi {
             );
         },
     };
+}
+
+type HostAccountsProvider = NonNullable<Awaited<ReturnType<typeof getAccountsProvider>>>;
+
+async function getHostAccountsProvider(): Promise<HostAccountsProvider> {
+    const provider = await getAccountsProvider();
+    if (!provider) {
+        throw new Error("Host accounts provider is not available");
+    }
+    return provider;
+}
+
+async function getPrimaryUsername(accountsProvider: HostAccountsProvider): Promise<string> {
+    const result = await accountsProvider.getUserId().match(
+        (value) => value,
+        (err) => {
+            throw err;
+        },
+    );
+    const username = result.primaryUsername.trim();
+    if (!username) {
+        throw new Error("Host identity did not provide a primary DotNS username");
+    }
+    return username;
 }

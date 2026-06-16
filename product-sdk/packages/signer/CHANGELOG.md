@@ -1,5 +1,105 @@
 # @parity/product-sdk-signer
 
+## 0.8.1
+
+### Patch Changes
+
+- c39332e: chore(deps): bump @novasamatech/\* host SDKs to 0.8.9
+
+  Update the upstream host-API SDKs to the 0.8.9 release:
+
+  - catalog: `@novasamatech/host-api` and `@novasamatech/host-api-wrapper` `^0.8.8` → `^0.8.9`
+  - terminal: `@novasamatech/host-papp`, `@novasamatech/statement-store`, `@novasamatech/storage-adapter`, and `@novasamatech/substrate-slot-sr25519-wasm` `^0.8.8` → `^0.8.9`
+
+  `@novasamatech/sdk-statement` is unaffected (separate package, latest is 0.6.0).
+
+- c39332e: **`SignerManager.connect("host")` now derives a product account from `dappName` instead of calling the host's legacy-account enumeration.**
+
+  On Proof-of-Personhood / product-account hosts (Polkadot Desktop today, Polkadot Mobile going forward), `accounts.getLegacyAccounts()` is hard-coded to return `[]` by design — the host exposes only per-dapp product accounts via enumeration and never the user's identity account. Pre-this-PR, calling `app.wallet.connect()` on such hosts surfaced `NoAccountsError`, which made the simplest possible "connect a wallet" flow unusable.
+
+  ### What changed
+
+  `HostProvider.tryConnect()`:
+
+  - The legacy-fetch branch (`provider.getLegacyAccounts()` → `mapAccounts(...)` → `NoAccountsError` on empty) is replaced with a derivation branch (`fetchProductSignerAccount(dappName + ".dot", 0)`).
+  - When `dappName` is not set, OR the host rejects the derivation (typically because the dotNS identifier isn't registered for this user), `connect()` resolves with `ok([])` rather than throwing. Consumers can still drive the explicit signing paths (`wallet.signMessageWithDotNsIdentity`, `accounts.getLegacyAccountSigner`).
+  - `HostProviderOptions` gains a `dappName?: string` field, wired through automatically from `SignerManager` (consumers don't pass it directly).
+  - The `AccountsProvider` interface drops the now-unused `getLegacyAccounts` field. `getLegacyAccountSigner` is **kept** — it's the load-bearing primitive for explicit-name signing (used by `wallet.signMessageWithDotNsIdentity`).
+
+  ### No public API change
+
+  - `SignerManager` constructor, `connect()`, and all other methods: unchanged.
+  - `HostProvider` constructor: unchanged (`dappName` is additive).
+  - `app.wallet.connect()` return shape: unchanged (`{ accounts: Account[] }`).
+  - `getLegacyAccountSigner`, `getProductAccount`, `getProductAccountAlias`, `getUserId`, `createRingVRFProof`, `subscribeAccountConnectionStatus`: unchanged.
+
+  ### Behavioral note for consumers
+
+  Anyone catching `NoAccountsError` to gate UI on Polkadot Desktop will see the error go away — `connect()` now resolves with one product-derived account (when the host can derive it) or an empty list (when it can't). Most consumers handle empty arrays gracefully; if you guarded on `NoAccountsError` specifically, switch to checking `accounts.length === 0`.
+
+  The `dappName` you pass to `createApp({ name })` or `new SignerManager({ dappName })` is now also the dotNS identifier the host derives the product account from. `.dot` is appended automatically if missing. If your `dappName` isn't a valid registered dotNS identifier, the host will reject the derivation and `connect()` will resolve with `[]` — usable for explicit-name signing flows but no enumerated account.
+
+- Updated dependencies [c39332e]
+  - @parity/product-sdk-host@0.10.2
+  - @parity/product-sdk-keys@0.3.10
+
+## 0.8.0
+
+### Minor Changes
+
+- 9ce5ab2: **Sign messages with the account that owns a People / People Lite DotNS username, plus a catalog bump to `@novasamatech/host-api` 0.8.8.**
+
+  ### `@parity/product-sdk` — `wallet.signMessageWithDotNsIdentity`
+
+  - `wallet.signMessageWithDotNsIdentity({ peopleChain, username?, message })` — resolves `Resources.UsernameOwnerOf` on the supplied People / Individuality chain descriptor, then signs the message with that account through the host's legacy-account signing path. Returns `{ username, accountId, signature }`.
+  - A matching `useWallet` action surfaces the same call from React.
+  - Falls back to the host's primary DotNS username when none is supplied (via the host's `accounts.getUserId()` — triggers a host identity-permission prompt).
+
+  **Implementation note (worth knowing for consumers).** The owning account is named explicitly via the host's `getLegacyAccountSigner({ publicKey })` rather than matched against an enumerated wallet list. On Proof-of-Personhood / product-account hosts (e.g. Polkadot Desktop), the connected-accounts list returned by `getLegacyAccounts()` is intentionally empty — the host exposes only per-dapp product accounts via enumeration and never surfaces the user's identity account. Such hosts still sign with that account when it's _named explicitly_ (typically behind a user-approval prompt), and that's the path this flow uses.
+
+  **Chain-connection lifecycle is automatic.** The SDK reuses an existing chain client when `app.chain.connect({ ..., <name>: peopleChain })` was called upfront (matched by genesis), and falls back to opening a transient connection otherwise. For long-running apps, call `app.chain.connect` once at startup to avoid the cold-path cost.
+
+  ### `@parity/product-sdk-signer` — `SignerManager.getUserId()`
+
+  `SignerManager.getUserId()` wraps the existing `HostProvider.getUserId()` for callers that want to fetch the host primary username without going through a product-account-derivation flow. Returns `HostUnavailableError` when not connected via host, `DestroyedError` after `destroy()`.
+
+  ### Catalog bump — `@novasamatech/host-api` family `^0.8.7` → `^0.8.8`
+
+  `@novasamatech/host-api`, `@novasamatech/host-api-wrapper`, `@novasamatech/host-papp`, `@novasamatech/statement-store`, `@novasamatech/storage-adapter`, and `@novasamatech/substrate-slot-sr25519-wasm` move from `^0.8.7` to `^0.8.8`. The headline from upstream is the **legacy sign-request protocol** (PR #218): new `signRawLegacy` / `createTransactionLegacy` UserSession methods plus the matching SCALE codecs (`SignRawLegacyRequest`/`Response`, `CreateTransactionLegacyRequest`, `LegacyTransaction`). This is the protocol scaffolding the new `signMessageWithDotNsIdentity` flow relies on for signing with a wallet's identity account.
+
+  No session/secrets codec changes — `terminal`'s `testing.ts` codec mirror round-trips cleanly against 0.8.8; both interop suites pass.
+
+  ### Example
+
+  ```ts
+  import { createApp } from "@parity/product-sdk";
+  import { paseo_individuality } from "@parity/product-sdk-descriptors/paseo-individuality";
+
+  const app = await createApp({ name: "my-app" });
+
+  // Recommended: connect the People chain upfront to share one chainHead
+  // subscription across every subsequent identity sign.
+  await app.chain.connect({ people: paseo_individuality });
+
+  // No prior `app.wallet.connect()` required — the signing flow names the
+  // identity account directly and the host prompts the user to approve.
+  //
+  // Omit `username` to sign with the host's primary username (the one shown
+  // for the currently-logged-in user), or pass it explicitly to sign with a
+  // specific People-chain identity the user owns.
+  const { username, accountId, signature } =
+    await app.wallet.signMessageWithDotNsIdentity({
+      peopleChain: paseo_individuality,
+      message: "verifying ownership",
+    });
+  ```
+
+### Patch Changes
+
+- Updated dependencies [9ce5ab2]
+  - @parity/product-sdk-host@0.10.1
+  - @parity/product-sdk-keys@0.3.9
+
 ## 0.7.0
 
 ### Minor Changes
