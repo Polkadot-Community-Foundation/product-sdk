@@ -1,5 +1,46 @@
 # @parity/product-sdk
 
+## 0.14.1
+
+### Patch Changes
+
+- c39332e: **`SignerManager.connect("host")` now derives a product account from `dappName` instead of calling the host's legacy-account enumeration.**
+
+  On Proof-of-Personhood / product-account hosts (Polkadot Desktop today, Polkadot Mobile going forward), `accounts.getLegacyAccounts()` is hard-coded to return `[]` by design — the host exposes only per-dapp product accounts via enumeration and never the user's identity account. Pre-this-PR, calling `app.wallet.connect()` on such hosts surfaced `NoAccountsError`, which made the simplest possible "connect a wallet" flow unusable.
+
+  ### What changed
+
+  `HostProvider.tryConnect()`:
+
+  - The legacy-fetch branch (`provider.getLegacyAccounts()` → `mapAccounts(...)` → `NoAccountsError` on empty) is replaced with a derivation branch (`fetchProductSignerAccount(dappName + ".dot", 0)`).
+  - When `dappName` is not set, OR the host rejects the derivation (typically because the dotNS identifier isn't registered for this user), `connect()` resolves with `ok([])` rather than throwing. Consumers can still drive the explicit signing paths (`wallet.signMessageWithDotNsIdentity`, `accounts.getLegacyAccountSigner`).
+  - `HostProviderOptions` gains a `dappName?: string` field, wired through automatically from `SignerManager` (consumers don't pass it directly).
+  - The `AccountsProvider` interface drops the now-unused `getLegacyAccounts` field. `getLegacyAccountSigner` is **kept** — it's the load-bearing primitive for explicit-name signing (used by `wallet.signMessageWithDotNsIdentity`).
+
+  ### No public API change
+
+  - `SignerManager` constructor, `connect()`, and all other methods: unchanged.
+  - `HostProvider` constructor: unchanged (`dappName` is additive).
+  - `app.wallet.connect()` return shape: unchanged (`{ accounts: Account[] }`).
+  - `getLegacyAccountSigner`, `getProductAccount`, `getProductAccountAlias`, `getUserId`, `createRingVRFProof`, `subscribeAccountConnectionStatus`: unchanged.
+
+  ### Behavioral note for consumers
+
+  Anyone catching `NoAccountsError` to gate UI on Polkadot Desktop will see the error go away — `connect()` now resolves with one product-derived account (when the host can derive it) or an empty list (when it can't). Most consumers handle empty arrays gracefully; if you guarded on `NoAccountsError` specifically, switch to checking `accounts.length === 0`.
+
+  The `dappName` you pass to `createApp({ name })` or `new SignerManager({ dappName })` is now also the dotNS identifier the host derives the product account from. `.dot` is appended automatically if missing. If your `dappName` isn't a valid registered dotNS identifier, the host will reject the derivation and `connect()` will resolve with `[]` — usable for explicit-name signing flows but no enumerated account.
+
+- Updated dependencies [c39332e]
+- Updated dependencies [c39332e]
+  - @parity/product-sdk-host@0.10.2
+  - @parity/product-sdk-signer@0.8.1
+  - @parity/product-sdk-chain-client@0.7.4
+  - @parity/product-sdk-cloud-storage@0.6.4
+  - @parity/product-sdk-local-storage@0.2.9
+  - @parity/product-sdk-contracts@0.7.7
+  - @parity/product-sdk-keys@0.3.10
+  - @parity/product-sdk-tx@0.2.14
+
 ## 0.14.0
 
 ### Minor Changes
