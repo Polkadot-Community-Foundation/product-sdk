@@ -20,9 +20,11 @@
         "clean": "rm -rf dist"
     },
     "dependencies": {
-        "@novasamatech/host-api": "catalog:",
-        "@novasamatech/host-api-wrapper": "catalog:",
         "@parity/product-sdk-logger": "workspace:*",
+        "@parity/truapi": "catalog:",
+        "@polkadot-api/json-rpc-provider": "catalog:",
+        "@polkadot-api/substrate-bindings": "catalog:",
+        "neverthrow": "^8.2.0",
         "polkadot-api": "catalog:"
     },
     "devDependencies": {

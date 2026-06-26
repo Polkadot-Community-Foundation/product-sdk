@@ -32,41 +32,38 @@ export type {
 } from "./types.js";
 export { BULLETIN_RPCS, DEFAULT_BULLETIN_ENDPOINT } from "./chains.js";
 
-// TruAPI - re-exports from @novasamatech/host-api-wrapper and @novasamatech/host-api
+// TruAPI - @parity/truapi client accessor + convenience wrappers.
 export {
     getTruApi,
     getPreimageManager,
     createHostPreimageManager,
-    getAccountsProvider,
     requestResourceAllocation,
     createProofAuthorized,
     formatHostError,
-    // Helpers from @novasamatech/host-api
-    enumValue,
-    isEnumVariant,
-    assertEnumVariant,
-    unwrapResultOrThrow,
-    resultOk,
-    resultErr,
+    // Hex helpers
     toHex,
     fromHex,
 } from "./truapi.js";
 export type {
     TruApi,
     HexString,
+    HostError,
     PreimageManager,
+    ResultAsync,
+    AllocatableResource,
+    AllocationOutcome,
+    RemotePermission,
+} from "./truapi.js";
+
+// Accounts — host wallet accounts, product accounts, Ring VRF, and signers.
+export { getAccountsProvider } from "./accounts.js";
+export type {
     AccountsProvider,
     HostAccount,
     ProductAccount,
     ContextualAlias,
-    ResultAsync,
-    AllocatableResource,
-    AllocatableResourceTag,
-    AllocationOutcome,
-    AllocationOutcomeTag,
-    RemotePermission,
-    RemotePermissionTag,
-} from "./truapi.js";
+    RingLocation,
+} from "./accounts.js";
 
 // Higher-level permission wrappers
 export { requestPermission, requestDevicePermission } from "./permissions.js";
@@ -80,7 +77,7 @@ export type { ThemeMode, ThemeName, ThemeProvider, ThemeVariant } from "./theme.
 export { deriveEntropy } from "./entropy.js";
 
 // Chat
-export { getChatManager, matchChatCustomRenderers } from "./chat.js";
+export { getChatManager } from "./chat.js";
 export type {
     ChatManager,
     ChatMessageContent,
@@ -88,20 +85,24 @@ export type {
     ChatRoom,
     ChatRoomRegistrationResult,
     ChatBotRegistrationResult,
-    ChatCustomMessageRenderer,
-    ChatCustomMessageRendererParams,
 } from "./chat.js";
 
 // Payments (RFC-0006)
 export { getPaymentManager } from "./payments.js";
-export type { PaymentManager, PaymentBalance, PaymentStatus, TopUpSource } from "./payments.js";
+export type { PaymentManager } from "./payments.js";
+export type {
+    HostPaymentBalanceSubscribeItem,
+    HostPaymentStatusSubscribeItem,
+    PaymentTopUpSource,
+} from "@parity/truapi";
 
 // Notifications
-export { getNotificationManager, PushNotificationError } from "./notifications.js";
+export { getNotificationManager } from "./notifications.js";
 export type {
     NotificationManager,
     NotificationId,
     PushNotificationInput,
+    PushNotificationError,
 } from "./notifications.js";
 
 // Deep-link navigation

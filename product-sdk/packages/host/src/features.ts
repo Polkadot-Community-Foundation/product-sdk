@@ -3,36 +3,36 @@
 /**
  * Higher-level wrappers for the host's feature-support probe.
  *
- * `hostApi.featureSupported` is reachable via {@link getTruApi}, but consumers
- * have to wrap the feature in the versioned envelope (`enumValue("v1", ...)`)
- * and unwrap the neverthrow `ResultAsync` themselves. {@link featureSupported}
- * collapses that to a throw-on-error Promise; {@link isChainSupported} is a
- * convenience over the only feature variant the host exposes today (`Chain`).
+ * `truApi.system.featureSupported` returns a neverthrow `ResultAsync`;
+ * {@link featureSupported} collapses that to a throw-on-error Promise and
+ * returns the host's boolean answer. {@link isChainSupported} is a convenience
+ * over the only feature variant the host exposes today (`Chain`).
  *
  * @module
  */
 
 import { createLogger } from "@parity/product-sdk-logger";
 
-import { enumValue, formatHostError, getTruApi, type HexString } from "./truapi.js";
+import { formatHostError, getTruApi, type HexString } from "./truapi.js";
 
 const log = createLogger("host:features");
 
 /**
  * A feature the host can be probed for via {@link featureSupported}.
  *
- * As of `host-api` v0.8 the only variant is `Chain`, carrying the chain's
- * `0x`-prefixed genesis hash. Modeled locally (rather than derived from an
- * upstream codec) because the protocol exposes the feature only inline; new
- * variants surface here as a widening of the union.
+ * The only variant today is `Chain`, carrying the chain's `0x`-prefixed genesis
+ * hash. This is a flattened form of truapi's `HostFeatureSupportedRequest`,
+ * which nests the hash as `{ tag: "Chain"; value: { genesisHash } }` — we
+ * inline `value` as the `HexString` for ergonomics and re-nest it at the call
+ * site. New variants surface here as a widening of the union.
  */
 export type Feature = { tag: "Chain"; value: HexString };
 
 /**
  * Probe the host for support of a specific feature.
  *
- * Builds the `v1` envelope, calls `hostApi.featureSupported`, unwraps the
- * response, and returns the host's boolean answer.
+ * Calls `truApi.system.featureSupported`, unwraps the response, and returns the
+ * host's boolean answer.
  *
  * @param feature - The feature to probe for.
  * @returns `true` if the host supports the feature, `false` otherwise.
@@ -53,12 +53,14 @@ export async function featureSupported(feature: Feature): Promise<boolean> {
     log.debug("featureSupported", { tag: feature.tag });
 
     // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    return await truApi.featureSupported(enumValue("v1", feature)).match(
-        (envelope: { tag: "v1"; value: boolean }) => envelope.value,
-        (err: unknown) => {
-            throw new Error(`featureSupported failed: ${formatHostError(err)}`, { cause: err });
-        },
-    );
+    return await truApi.system
+        .featureSupported({ tag: feature.tag, value: { genesisHash: feature.value } })
+        .match(
+            (response) => response.supported,
+            (err: unknown) => {
+                throw new Error(`featureSupported failed: ${formatHostError(err)}`, { cause: err });
+            },
+        );
 }
 
 /**
@@ -86,7 +88,7 @@ if (import.meta.vitest) {
     const { test, expect, describe, vi } = import.meta.vitest;
 
     async function withMockedTruApi<T>(
-        bridge: { featureSupported?: (req: unknown) => unknown } | null,
+        bridge: { system?: { featureSupported?: (req: unknown) => unknown } } | null,
         fn: (mod: typeof import("./features.js")) => Promise<T>,
     ): Promise<T> {
         vi.resetModules();
@@ -95,7 +97,6 @@ if (import.meta.vitest) {
             return {
                 ...original,
                 getTruApi: async () => bridge,
-                enumValue: (version: string, value: unknown) => ({ tag: version, value }),
             };
         });
         try {
@@ -107,10 +108,12 @@ if (import.meta.vitest) {
         }
     }
 
-    const okBridge = (value: boolean) => ({
-        featureSupported: vi.fn().mockReturnValue({
-            match: async (onOk: (v: unknown) => unknown) => onOk({ tag: "v1", value }),
-        }),
+    const okBridge = (supported: boolean) => ({
+        system: {
+            featureSupported: vi.fn().mockReturnValue({
+                match: async (onOk: (v: unknown) => unknown) => onOk({ supported }),
+            }),
+        },
     });
 
     describe("featureSupported", () => {
@@ -122,7 +125,7 @@ if (import.meta.vitest) {
             });
         });
 
-        test("unwraps the v1 boolean outcome", async () => {
+        test("unwraps the boolean outcome", async () => {
             await withMockedTruApi(okBridge(true), async (mod) => {
                 expect(await mod.featureSupported({ tag: "Chain", value: "0x00" })).toBe(true);
             });
@@ -131,21 +134,19 @@ if (import.meta.vitest) {
         test("wraps host errors with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    featureSupported: vi.fn().mockReturnValue({
-                        match: async (
-                            _onOk: (v: unknown) => unknown,
-                            onErr: (e: unknown) => unknown,
-                        ) =>
-                            onErr({
-                                tag: "v1",
-                                value: { name: "GenericError", message: "boom" },
-                            }),
-                    }),
+                    system: {
+                        featureSupported: vi.fn().mockReturnValue({
+                            match: async (
+                                _onOk: (v: unknown) => unknown,
+                                onErr: (e: unknown) => unknown,
+                            ) => onErr({ reason: "boom" }),
+                        }),
+                    },
                 },
                 async (mod) => {
                     await expect(
                         mod.featureSupported({ tag: "Chain", value: "0x00" }),
-                    ).rejects.toThrow(/featureSupported failed: GenericError: boom/);
+                    ).rejects.toThrow(/featureSupported failed: boom/);
                 },
             );
         });

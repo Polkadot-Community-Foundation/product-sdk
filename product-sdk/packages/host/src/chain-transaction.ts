@@ -3,29 +3,28 @@
 /**
  * Higher-level wrappers for the host's transaction broadcast lifecycle.
  *
- * `hostApi.chainTransactionBroadcast` / `hostApi.chainTransactionStop` are
- * reachable via {@link getTruApi}, but consumers have to build the versioned
- * envelope (`enumValue("v1", ...)`) and unwrap the neverthrow `ResultAsync`
- * themselves. {@link broadcastTransaction} and {@link stopTransaction}
- * collapse that to throw-on-error Promises, mirroring the JSON-RPC
- * `transaction_v1_broadcast` / `transaction_v1_stop` pair they wrap.
+ * `truApi.chain.broadcastTransaction` / `truApi.chain.stopTransaction` are
+ * reachable via {@link getTruApi}, but consumers have to unwrap the neverthrow
+ * `ResultAsync` themselves. {@link broadcastTransaction} and
+ * {@link stopTransaction} collapse that to throw-on-error Promises, mirroring
+ * the JSON-RPC `transaction_v1_broadcast` / `transaction_v1_stop` pair they
+ * wrap.
  *
  * @module
  */
 
 import { createLogger } from "@parity/product-sdk-logger";
 
-import { enumValue, formatHostError, getTruApi, type HexString } from "./truapi.js";
+import { formatHostError, getTruApi, type HexString } from "./truapi.js";
 
 const log = createLogger("host:chain-transaction");
 
 /**
  * Broadcast a signed transaction to the network via the host.
  *
- * Builds the `v1` envelope, calls `hostApi.chainTransactionBroadcast`, and
- * unwraps the response. The host keeps re-broadcasting until the transaction
- * is finalized/dropped or {@link stopTransaction} is called with the returned
- * operation id.
+ * Calls `truApi.chain.broadcastTransaction` and unwraps the response. The host
+ * keeps re-broadcasting until the transaction is finalized/dropped or
+ * {@link stopTransaction} is called with the returned operation id.
  *
  * @param genesisHash - The `0x`-prefixed genesis hash of the target chain.
  * @param transaction - The `0x`-prefixed SCALE-encoded signed transaction.
@@ -53,23 +52,20 @@ export async function broadcastTransaction(
     log.debug("broadcastTransaction", { genesisHash });
 
     // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    return await truApi
-        .chainTransactionBroadcast(enumValue("v1", { genesisHash, transaction }))
-        .match(
-            (envelope: { tag: "v1"; value: string | null }) => envelope.value,
-            (err: unknown) => {
-                throw new Error(`broadcastTransaction failed: ${formatHostError(err)}`, {
-                    cause: err,
-                });
-            },
-        );
+    return await truApi.chain.broadcastTransaction({ genesisHash, transaction }).match(
+        (response) => response.operationId ?? null,
+        (err: unknown) => {
+            throw new Error(`broadcastTransaction failed: ${formatHostError(err)}`, {
+                cause: err,
+            });
+        },
+    );
 }
 
 /**
  * Stop an in-flight broadcast started by {@link broadcastTransaction}.
  *
- * Builds the `v1` envelope, calls `hostApi.chainTransactionStop`, and unwraps
- * the response.
+ * Calls `truApi.chain.stopTransaction` and unwraps the response.
  *
  * @param genesisHash - The `0x`-prefixed genesis hash of the target chain.
  * @param operationId - The operation id returned by
@@ -89,8 +85,8 @@ export async function stopTransaction(genesisHash: HexString, operationId: strin
     log.debug("stopTransaction", { genesisHash, operationId });
 
     // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    await truApi.chainTransactionStop(enumValue("v1", { genesisHash, operationId })).match(
-        (_envelope: { tag: "v1"; value: undefined }) => undefined,
+    await truApi.chain.stopTransaction({ genesisHash, operationId }).match(
+        () => undefined,
         (err: unknown) => {
             throw new Error(`stopTransaction failed: ${formatHostError(err)}`, { cause: err });
         },
@@ -102,8 +98,10 @@ if (import.meta.vitest) {
 
     async function withMockedTruApi<T>(
         bridge: {
-            chainTransactionBroadcast?: (req: unknown) => unknown;
-            chainTransactionStop?: (req: unknown) => unknown;
+            chain?: {
+                broadcastTransaction?: (req: unknown) => unknown;
+                stopTransaction?: (req: unknown) => unknown;
+            };
         } | null,
         fn: (mod: typeof import("./chain-transaction.js")) => Promise<T>,
     ): Promise<T> {
@@ -113,7 +111,6 @@ if (import.meta.vitest) {
             return {
                 ...original,
                 getTruApi: async () => bridge,
-                enumValue: (version: string, value: unknown) => ({ tag: version, value }),
             };
         });
         try {
@@ -125,12 +122,14 @@ if (import.meta.vitest) {
         }
     }
 
-    const ok = (value: unknown) => ({
-        match: async (onOk: (v: unknown) => unknown) => onOk({ tag: "v1", value }),
+    /** A resolved ResultAsync stub yielding the given response object. */
+    const ok = (response: unknown) => ({
+        match: async (onOk: (v: unknown) => unknown) => onOk(response),
     });
-    const errResult = (name: string, message: string) => ({
+    /** A rejected ResultAsync stub yielding a truapi `GenericError` (`{ reason }`). */
+    const errResult = (reason: string) => ({
         match: async (_onOk: (v: unknown) => unknown, onErr: (e: unknown) => unknown) =>
-            onErr({ tag: "v1", value: { name, message } }),
+            onErr({ reason }),
     });
 
     describe("broadcastTransaction", () => {
@@ -144,16 +143,24 @@ if (import.meta.vitest) {
 
         test("unwraps the operation id", async () => {
             await withMockedTruApi(
-                { chainTransactionBroadcast: vi.fn().mockReturnValue(ok("op-1")) },
+                {
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(ok({ operationId: "op-1" })),
+                    },
+                },
                 async (mod) => {
                     expect(await mod.broadcastTransaction("0x00", "0x01")).toBe("op-1");
                 },
             );
         });
 
-        test("passes through a null operation id", async () => {
+        test("passes through a missing operation id as null", async () => {
             await withMockedTruApi(
-                { chainTransactionBroadcast: vi.fn().mockReturnValue(ok(null)) },
+                {
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(ok({})),
+                    },
+                },
                 async (mod) => {
                     expect(await mod.broadcastTransaction("0x00", "0x01")).toBeNull();
                 },
@@ -163,13 +170,13 @@ if (import.meta.vitest) {
         test("wraps host errors with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    chainTransactionBroadcast: vi
-                        .fn()
-                        .mockReturnValue(errResult("GenericError", "boom")),
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(errResult("boom")),
+                    },
                 },
                 async (mod) => {
                     await expect(mod.broadcastTransaction("0x00", "0x01")).rejects.toThrow(
-                        /broadcastTransaction failed: GenericError: boom/,
+                        /broadcastTransaction failed: boom/,
                     );
                 },
             );
@@ -185,9 +192,13 @@ if (import.meta.vitest) {
             });
         });
 
-        test("resolves on the v1 success envelope", async () => {
+        test("resolves on success", async () => {
             await withMockedTruApi(
-                { chainTransactionStop: vi.fn().mockReturnValue(ok(undefined)) },
+                {
+                    chain: {
+                        stopTransaction: vi.fn().mockReturnValue(ok(undefined)),
+                    },
+                },
                 async (mod) => {
                     await expect(mod.stopTransaction("0x00", "op-1")).resolves.toBeUndefined();
                 },
@@ -197,13 +208,13 @@ if (import.meta.vitest) {
         test("wraps host errors with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    chainTransactionStop: vi
-                        .fn()
-                        .mockReturnValue(errResult("GenericError", "boom")),
+                    chain: {
+                        stopTransaction: vi.fn().mockReturnValue(errResult("boom")),
+                    },
                 },
                 async (mod) => {
                     await expect(mod.stopTransaction("0x00", "op-1")).rejects.toThrow(
-                        /stopTransaction failed: GenericError: boom/,
+                        /stopTransaction failed: boom/,
                     );
                 },
             );

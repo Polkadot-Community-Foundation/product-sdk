@@ -3,28 +3,27 @@
 /**
  * Higher-level wrapper for the host's deep-link navigation.
  *
- * `hostApi.navigateTo` is reachable via {@link getTruApi}, but consumers have
- * to wrap the URL in the versioned envelope (`enumValue("v1", ...)`) and
- * unwrap the neverthrow `ResultAsync` themselves. {@link navigateTo} collapses
- * that to a throw-on-error Promise that matches the shape of
- * {@link requestPermission} and {@link deriveEntropy}.
+ * `truApi.system.navigateTo` returns a neverthrow `ResultAsync`; consumers
+ * still have to unwrap it themselves. {@link navigateTo} collapses that to a
+ * throw-on-error Promise that matches the shape of {@link requestPermission}
+ * and {@link deriveEntropy}.
  *
  * @module
  */
 
 import { createLogger } from "@parity/product-sdk-logger";
 
-import { enumValue, formatHostError, getTruApi } from "./truapi.js";
+import { formatHostError, getTruApi } from "./truapi.js";
 
 const log = createLogger("host:navigation");
 
 /**
  * Ask the host to navigate to a URL (deep link or external link).
  *
- * Builds the `v1` envelope, calls `hostApi.navigateTo`, and unwraps the
- * response. The host resolves the destination itself — a `dot`-suffixed
- * deep link (e.g. `"https://search.dot"`) routes to another app/route inside
- * the container, an `https://` URL opens externally.
+ * Calls `truApi.system.navigateTo` and unwraps the response. The host resolves
+ * the destination itself — a `dot`-suffixed deep link (e.g.
+ * `"https://search.dot"`) routes to another app/route inside the container, an
+ * `https://` URL opens externally.
  *
  * @param url - The URL to navigate to.
  * @throws If the host is unavailable, denies the navigation
@@ -46,8 +45,8 @@ export async function navigateTo(url: string): Promise<void> {
     log.debug("navigateTo", { url });
 
     // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    await truApi.navigateTo(enumValue("v1", url)).match(
-        (_envelope: { tag: "v1"; value: undefined }) => undefined,
+    await truApi.system.navigateTo({ url }).match(
+        () => undefined,
         (err: unknown) => {
             throw new Error(`navigateTo failed: ${formatHostError(err)}`, { cause: err });
         },
@@ -58,7 +57,7 @@ if (import.meta.vitest) {
     const { test, expect, describe, vi } = import.meta.vitest;
 
     async function withMockedTruApi<T>(
-        bridge: { navigateTo?: (req: unknown) => unknown } | null,
+        bridge: { system?: { navigateTo?: (req: unknown) => unknown } } | null,
         fn: (mod: typeof import("./navigation.js")) => Promise<T>,
     ): Promise<T> {
         vi.resetModules();
@@ -67,7 +66,6 @@ if (import.meta.vitest) {
             return {
                 ...original,
                 getTruApi: async () => bridge,
-                enumValue: (version: string, value: unknown) => ({ tag: version, value }),
             };
         });
         try {
@@ -88,13 +86,14 @@ if (import.meta.vitest) {
             });
         });
 
-        test("resolves on the v1 success envelope", async () => {
+        test("resolves on success", async () => {
             await withMockedTruApi(
                 {
-                    navigateTo: vi.fn().mockReturnValue({
-                        match: async (onOk: (v: unknown) => unknown) =>
-                            onOk({ tag: "v1", value: undefined }),
-                    }),
+                    system: {
+                        navigateTo: vi.fn().mockReturnValue({
+                            match: async (onOk: (v: unknown) => unknown) => onOk(undefined),
+                        }),
+                    },
                 },
                 async (mod) => {
                     await expect(mod.navigateTo("https://search.dot")).resolves.toBeUndefined();
@@ -105,20 +104,18 @@ if (import.meta.vitest) {
         test("wraps host errors with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    navigateTo: vi.fn().mockReturnValue({
-                        match: async (
-                            _onOk: (v: unknown) => unknown,
-                            onErr: (e: unknown) => unknown,
-                        ) =>
-                            onErr({
-                                tag: "v1",
-                                value: { name: "NavigateToErr::PermissionDenied", message: "no" },
-                            }),
-                    }),
+                    system: {
+                        navigateTo: vi.fn().mockReturnValue({
+                            match: async (
+                                _onOk: (v: unknown) => unknown,
+                                onErr: (e: unknown) => unknown,
+                            ) => onErr({ tag: "PermissionDenied" }),
+                        }),
+                    },
                 },
                 async (mod) => {
                     await expect(mod.navigateTo("https://search.dot")).rejects.toThrow(
-                        /navigateTo failed: NavigateToErr::PermissionDenied: no/,
+                        /navigateTo failed: PermissionDenied/,
                     );
                 },
             );

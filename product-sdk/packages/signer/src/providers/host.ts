@@ -1,6 +1,11 @@
 // Copyright 2026 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 import { deriveH160, ss58Encode } from "@parity/product-sdk-address";
+import {
+    getAccountsProvider,
+    type RemotePermission,
+    requestPermission,
+} from "@parity/product-sdk-host";
 import { createLogger } from "@parity/product-sdk-logger";
 
 import { HostRejectedError, HostUnavailableError, type SignerError } from "../errors.js";
@@ -36,17 +41,18 @@ export interface HostProviderOptions {
      */
     dappName?: string;
     /**
-     * Custom SDK loader. Defaults to `import("@novasamatech/host-api-wrapper")`.
-     * Override this for testing or custom SDK setups.
+     * Custom accounts-provider loader. Defaults to `@parity/product-sdk-host`'s
+     * `getAccountsProvider`, which returns `null` outside a host container.
+     * Override for testing or custom host setups.
      * @internal
      */
-    loadSdk?: () => Promise<ProductSdkModule>;
+    loadAccountsProvider?: () => Promise<AccountsProvider | null>;
     /**
-     * Custom loader for `@novasamatech/host-api` (used to construct the
-     * `ChainSubmit` permission request). Defaults to dynamic import.
+     * Custom `ChainSubmit` permission requester. Defaults to
+     * `@parity/product-sdk-host`'s `requestPermission`. Override for testing.
      * @internal
      */
-    loadHostApiEnum?: () => Promise<HostApiEnumHelper>;
+    requestChainSubmitPermissionFn?: (permission: RemotePermission) => Promise<boolean>;
     /**
      * Whether to request the host's `ChainSubmit` permission after a
      * successful `connect()`. Without this, subsequent signing requests are
@@ -141,24 +147,23 @@ interface NeverthrowResultAsync<T, E> {
 }
 
 /**
- * Pin product-account signing to Nova's `host_create_transaction` path.
+ * Pin product-account signing to the host's `createTransaction` path.
  *
- * The `createTransaction` path forwards opaque signed-extension bytes to
- * the host for metadata-driven decoding, so unknown extensions (e.g.
- * `AsPgas` on Paseo Next) survive end-to-end. The alternate
- * `"signPayload"` path wraps via PJS and throws
- * `"PJS does not support this signed-extension: AsPgas"` on those chains.
- *
- * Nova's `host-api-wrapper@0.8.0` already defaults to `"createTransaction"`,
- * so this is a defensive pin rather than an opt-in — it guards against a
- * future upstream default flip and makes the routing legible at the call
- * site. The legacy-account signer doesn't expose this switch.
+ * The `createTransaction` path forwards opaque signed-extension bytes to the
+ * host for metadata-driven decoding, so unknown extensions (e.g. `AsPgas` on
+ * Paseo Next) survive end-to-end. The alternate `"signPayload"` path wraps via
+ * PJS and throws `"PJS does not support this signed-extension: AsPgas"` on
+ * those chains. Pinning it here keeps the routing legible at the call site;
+ * the legacy-account signer doesn't expose this switch.
  */
 const PRODUCT_SIGNER_TYPE = "createTransaction" as const;
 
 /** @internal */
 export interface AccountsProvider {
-    getLegacyAccountSigner: (account: ProductAccount) => import("polkadot-api").PolkadotSigner;
+    getLegacyAccounts: () => NeverthrowResultAsync<RawAccount[], unknown>;
+    getLegacyAccountSigner: (account: {
+        publicKey: Uint8Array;
+    }) => import("polkadot-api").PolkadotSigner;
     getProductAccount: (
         dotNsIdentifier: string,
         derivationIndex?: number,
@@ -183,57 +188,21 @@ export interface AccountsProvider {
     ) => { unsubscribe: () => void } | (() => void);
 }
 
-/** @internal */
-export interface HostApiPermissionBridge {
-    /**
-     * Request a Host API permission. Product-sdk's `hostApi.permission(...)`
-     * takes a tagged enum like `enumValue("v1", { tag: "TransactionSubmit" })`
-     * and returns a neverthrow ResultAsync.
-     */
-    permission: (request: unknown) => NeverthrowResultAsync<unknown, unknown>;
-}
-
-/** @internal */
-export interface HostApiEnumHelper {
-    enumValue: (version: string, value: { tag: string; value?: unknown }) => unknown;
-}
-
-/** @internal */
-export interface ProductSdkModule {
-    createAccountsProvider: () => AccountsProvider;
-    /** Present from product-sdk ≥ 0.6; used to request TransactionSubmit. */
-    hostApi?: HostApiPermissionBridge;
-    /**
-     * `sandboxTransport.isCorrectEnvironment()` returns `false` when the app
-     * is loaded outside a Polkadot host container (e.g. a regular browser
-     * tab). Calling `getLegacyAccounts()` / `getProductAccount()` in that
-     * state surfaces the upstream `Environment is not correct` exception,
-     * so we pre-check during `connect()` and raise a specific
-     * {@link HostUnavailableError} with actionable guidance instead.
-     */
-    sandboxTransport?: { isCorrectEnvironment(): boolean };
-}
-
 /* @integration */
-async function defaultLoadSdk(): Promise<ProductSdkModule> {
-    return (await import("@novasamatech/host-api-wrapper")) as unknown as ProductSdkModule;
-}
-
-/* @integration */
-async function defaultLoadHostApiEnum(): Promise<HostApiEnumHelper> {
-    return (await import("@novasamatech/host-api")) as unknown as HostApiEnumHelper;
+async function defaultLoadAccountsProvider(): Promise<AccountsProvider | null> {
+    // `@parity/product-sdk-host`'s provider is structurally compatible with the
+    // (looser) shape declared above; the cast bridges the nominal gap.
+    return (await getAccountsProvider()) as unknown as AccountsProvider | null;
 }
 
 /**
  * Provider for the Host API (Polkadot Desktop / Android).
  *
- * Dynamically imports `@novasamatech/host-api-wrapper` at runtime. Apps running
- * outside a host container — e.g. a plain browser tab during `npm run dev` —
- * resolve to {@link HostUnavailableError} with guidance on what to do (open
- * the app inside a Polkadot host or pick a non-host provider). The check uses
- * the wrapper's `sandboxTransport.isCorrectEnvironment()` predicate and runs
- * before any host RPC call, so the user never sees the upstream
- * `Environment is not correct` exception leaking through.
+ * Backed by `@parity/product-sdk-host`'s `getAccountsProvider`, which talks to
+ * the host over `@parity/truapi`. Apps running outside a host container — e.g.
+ * a plain browser tab during `npm run dev` — get a `HOST_UNAVAILABLE` error
+ * (the provider resolves to `null`) with actionable guidance, surfaced before
+ * any host RPC call.
  *
  * Supports both non-product accounts (user's external wallets) and product
  * accounts (app-scoped derived accounts managed by the host).
@@ -243,8 +212,10 @@ export class HostProvider implements SignerProvider {
     private readonly ss58Prefix: number;
     private readonly maxRetries: number;
     private readonly retryDelay: number;
-    private readonly loadSdk: () => Promise<ProductSdkModule>;
-    private readonly loadHostApiEnum: () => Promise<HostApiEnumHelper>;
+    private readonly loadAccountsProvider: () => Promise<AccountsProvider | null>;
+    private readonly requestChainSubmitPermissionFn: (
+        permission: RemotePermission,
+    ) => Promise<boolean>;
     private readonly requestChainSubmitPermission: boolean;
     private readonly productAccount: HostProviderOptions["productAccount"];
     private readonly dappName: string | undefined;
@@ -258,8 +229,9 @@ export class HostProvider implements SignerProvider {
         this.ss58Prefix = options?.ss58Prefix ?? 42;
         this.maxRetries = options?.maxRetries ?? 3;
         this.retryDelay = options?.retryDelay ?? 500;
-        this.loadSdk = options?.loadSdk ?? defaultLoadSdk;
-        this.loadHostApiEnum = options?.loadHostApiEnum ?? defaultLoadHostApiEnum;
+        this.loadAccountsProvider = options?.loadAccountsProvider ?? defaultLoadAccountsProvider;
+        this.requestChainSubmitPermissionFn =
+            options?.requestChainSubmitPermissionFn ?? requestPermission;
         // New name takes precedence; fall back to the deprecated alias.
         this.requestChainSubmitPermission =
             options?.requestChainSubmitPermission ??
@@ -513,41 +485,33 @@ export class HostProvider implements SignerProvider {
     // ── Private ──────────────────────────────────────────────────────
 
     private async tryConnect(): Promise<Result<SignerAccount[], SignerError>> {
-        // Step 1: Load product-sdk
-        let sdk: ProductSdkModule;
+        // Step 1: Obtain the host accounts provider. `null` (or a thrown error)
+        // means we're not inside a host container.
+        let provider: AccountsProvider | null;
         try {
-            sdk = await this.loadSdk();
+            provider = await this.loadAccountsProvider();
         } catch (cause) {
-            log.warn("product-sdk not available", { cause });
+            log.warn("host accounts provider unavailable", { cause });
             return err(
                 new HostUnavailableError(
                     cause instanceof Error
-                        ? `product-sdk import failed: ${cause.message}`
-                        : "product-sdk is not installed",
+                        ? `host accounts provider failed: ${cause.message}`
+                        : "host accounts provider is unavailable",
                 ),
             );
         }
 
         // Step 2: Verify we're actually running inside a host container.
         //
-        // The upstream `host-api` transport throws `Error('Environment is not
-        // correct')` from inside `getLegacyAccounts()` / `getProductAccount()`
-        // when `sandboxTransport.isCorrectEnvironment()` returns false (i.e.
-        // we're not in an iframe under Polkadot Desktop, or a WebView under
-        // Polkadot Mobile). Without this pre-check, that exception used to
-        // surface as `HostRejectedError("Host rejected account request:
-        // Environment is not correct")` — misleading because no host rejected
-        // anything; there's no host at all.
-        //
-        // Returning `HostUnavailableError` here matches the TSDoc contract
-        // ("Apps running outside a host container will gracefully get a
-        // HOST_UNAVAILABLE error") and gives consumers actionable guidance.
-        //
-        // The `sandboxTransport` field is optional in `ProductSdkModule` so
-        // older wrapper versions (or test mocks that don't supply it) keep
-        // working — we fall through to the existing flow and rely on the
-        // catch in Step 4 as a safety net.
-        if (sdk.sandboxTransport && !sdk.sandboxTransport.isCorrectEnvironment()) {
+        // `getAccountsProvider()` resolves to `null` when the app isn't loaded
+        // inside a Polkadot host container (e.g. a plain browser tab during
+        // `npm run dev`, with no iframe under Polkadot Desktop or WebView under
+        // Polkadot Mobile). Returning `HostUnavailableError` here — before any
+        // host RPC call — matches the TSDoc contract ("Apps running outside a
+        // host container will gracefully get a HOST_UNAVAILABLE error") and
+        // gives consumers actionable guidance, rather than letting a later RPC
+        // surface a misleading rejection.
+        if (!provider) {
             log.warn("not inside a host container — Host API unavailable");
             return err(
                 new HostUnavailableError(
@@ -557,12 +521,9 @@ export class HostProvider implements SignerProvider {
                 ),
             );
         }
-
-        // Step 3: Create accounts provider
-        const provider = sdk.createAccountsProvider();
         this.accountsProvider = provider;
 
-        // Step 4: Fetch accounts.
+        // Step 3: Fetch accounts.
         //
         // Both branches end in `fetchProductSignerAccount`. The difference
         // is only where the dotNS identifier comes from:
@@ -631,7 +592,7 @@ export class HostProvider implements SignerProvider {
             signerAccounts = [];
         }
 
-        // Step 5: Request ChainSubmit permission up-front.
+        // Step 4: Request ChainSubmit permission up-front.
         //
         // The host gates signing on this permission — without it, the
         // production host rejects every sign request with `PermissionDenied`
@@ -644,30 +605,13 @@ export class HostProvider implements SignerProvider {
         // We don't fail `connect()` if this step fails: the consumer can still
         // use the signer for read-only code paths, and the actual sign call
         // will surface a clear error if permission is missing.
-        //
-        // The legal v1 RemotePermission variants per
-        // `@novasamatech/host-api@0.8.0` are: Remote, WebRtc, ChainSubmit,
-        // PreimageSubmit, StatementSubmit. ChainSubmit is the chain-tx
-        // permission (was named TransactionSubmit in earlier host-api
-        // revisions; renamed in 0.7). `WebRtc` was spelled `WebRTC` before
-        // 0.8.
-        if (this.requestChainSubmitPermission && sdk.hostApi) {
+        if (this.requestChainSubmitPermission) {
             try {
-                const hostApiEnum = await this.loadHostApiEnum();
-                const request = hostApiEnum.enumValue("v1", {
+                const granted = await this.requestChainSubmitPermissionFn({
                     tag: "ChainSubmit",
                     value: undefined,
                 });
-                await sdk.hostApi.permission(request).match(
-                    () => {
-                        log.debug("ChainSubmit permission granted");
-                    },
-                    (error) => {
-                        log.warn("ChainSubmit permission rejected by host", {
-                            error: formatError(error),
-                        });
-                    },
-                );
+                log.debug("ChainSubmit permission result", { granted });
             } catch (cause) {
                 log.warn("failed to request ChainSubmit permission", { cause });
             }
@@ -675,9 +619,11 @@ export class HostProvider implements SignerProvider {
 
         log.info("host connected", { accounts: signerAccounts.length });
 
-        // Step 6: Subscribe to connection status
+        // Step 5: Subscribe to connection status. The host reports a string
+        // union (`"Connected"` / `"Disconnected"`); match case-insensitively.
         const sub = provider.subscribeAccountConnectionStatus((status) => {
-            const mapped: ConnectionStatus = status === "connected" ? "connected" : "disconnected";
+            const mapped: ConnectionStatus =
+                String(status).toLowerCase() === "connected" ? "connected" : "disconnected";
             log.debug("host status changed", { status: mapped });
             for (const listener of this.statusListeners) {
                 listener(mapped);
@@ -746,7 +692,12 @@ export class HostProvider implements SignerProvider {
 function formatError(error: unknown): string {
     if (!error || typeof error !== "object") return String(error);
     const e = error as Record<string, unknown>;
-    if (!("tag" in e)) return String(error);
+    // truapi GenericError is { reason } with no `tag`.
+    if (!("tag" in e)) {
+        if (typeof e.reason === "string") return e.reason;
+        if (typeof e.message === "string") return e.message;
+        return String(error);
+    }
 
     const outerTag = String(e.tag);
     const inner = e.value;
@@ -855,78 +806,58 @@ if (import.meta.vitest) {
         };
     }
 
-    function createMockSdk(
-        mockProvider: ReturnType<typeof createMockProvider>,
-        opts?: {
-            hostApi?: HostApiPermissionBridge;
-            /**
-             * When provided, the mock's `sandboxTransport.isCorrectEnvironment()`
-             * returns this value — exercises the env-check branch added in the
-             * `connect()` flow. Omit to skip the check entirely (older-wrapper
-             * compatibility path).
-             */
-            isCorrectEnvironment?: boolean;
-        },
-    ): ProductSdkModule {
-        return {
-            createAccountsProvider: () => mockProvider as unknown as AccountsProvider,
-            ...(opts?.hostApi ? { hostApi: opts.hostApi } : {}),
-            ...(opts?.isCorrectEnvironment !== undefined
-                ? { sandboxTransport: { isCorrectEnvironment: () => opts.isCorrectEnvironment! } }
-                : {}),
-        };
+    /** Wrap a mock accounts provider as the loader the HostProvider expects. */
+    function loadProvider(mockProvider: ReturnType<typeof createMockProvider>) {
+        return () => Promise.resolve(mockProvider as unknown as AccountsProvider);
     }
 
-    /**
-     * A fake neverthrow ResultAsync-like object. Resolves via `onOk` when
-     * `error === undefined`, otherwise via `onErr`.
-     */
-    function fakeResult<T>(value: T, error?: unknown): NeverthrowResultAsync<T, unknown> {
-        return {
-            match: async (onOk, onErr) => {
-                if (error !== undefined) return onErr(error);
-                return onOk(value);
-            },
-        };
+    /** A permission requester spy that always grants, unless overridden. */
+    function grantPermission() {
+        return vi.fn<(permission: RemotePermission) => Promise<boolean>>().mockResolvedValue(true);
     }
-
-    const fakeHostApiEnum: HostApiEnumHelper = {
-        enumValue: (version, value) => ({ version, value }),
-    };
 
     beforeEach(() => {
         vi.restoreAllMocks();
     });
 
     describe("HostProvider", () => {
-        test("returns HOST_UNAVAILABLE when SDK load fails", async () => {
+        test("returns HOST_UNAVAILABLE when the accounts-provider loader throws", async () => {
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.reject(new Error("Cannot find module")),
+                loadAccountsProvider: () => Promise.reject(new Error("boom")),
             });
             const result = await provider.connect();
 
             expect(result.ok).toBe(false);
             if (!result.ok) {
                 expect(result.error).toBeInstanceOf(HostUnavailableError);
-                expect(result.error.message).toContain("Cannot find module");
+                expect(result.error.message).toContain("boom");
+            }
+        });
+
+        test("returns HOST_UNAVAILABLE when not inside a host container (provider null)", async () => {
+            const provider = new HostProvider({
+                maxRetries: 1,
+                loadAccountsProvider: () => Promise.resolve(null),
+            });
+            const result = await provider.connect();
+
+            expect(result.ok).toBe(false);
+            if (!result.ok) {
+                expect(result.error).toBeInstanceOf(HostUnavailableError);
             }
         });
 
         test("returns HOST_UNAVAILABLE with actionable guidance when not inside a host container", async () => {
-            // Repro for playground-cli#4: `pg mod foo` + `npm run dev` opens
-            // localhost in a plain browser tab (no iframe, no WebView).
-            // sandboxTransport.isCorrectEnvironment() returns false, and
-            // pre-fix we surfaced the upstream "Environment is not correct"
-            // as `HostRejectedError("Host rejected account request: ...")`.
-            // Post-fix: we pre-check during connect() and return a specific
-            // HostUnavailableError naming the host container and pointing
-            // the user at the fix path.
+            // Outside a host container `getAccountsProvider()` resolves to null;
+            // connect() returns a HostUnavailableError naming the host container
+            // and pointing the user at the fix path — without making any host
+            // RPC call. (Repro for playground-cli#4: `npm run dev` opens
+            // localhost in a plain browser tab — no iframe, no WebView.)
             const mockProvider = createMockProvider({ accounts: [] });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () =>
-                    Promise.resolve(createMockSdk(mockProvider, { isCorrectEnvironment: false })),
+                loadAccountsProvider: () => Promise.resolve(null),
             });
             const result = await provider.connect();
 
@@ -957,7 +888,8 @@ if (import.meta.vitest) {
             const provider = new HostProvider({
                 maxRetries: 1,
                 dappName: "my-cli",
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
             });
             const result = await provider.connect();
 
@@ -979,7 +911,8 @@ if (import.meta.vitest) {
             const provider = new HostProvider({
                 maxRetries: 1,
                 dappName: "my-cli.dot",
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
             });
             const result = await provider.connect();
 
@@ -997,7 +930,8 @@ if (import.meta.vitest) {
             const provider = new HostProvider({
                 maxRetries: 1,
                 dappName: "not-registered",
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
             });
             const result = await provider.connect();
 
@@ -1013,7 +947,8 @@ if (import.meta.vitest) {
             const mockProvider = createMockProvider({});
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
             });
             const result = await provider.connect();
 
@@ -1026,16 +961,16 @@ if (import.meta.vitest) {
         test("getProductAccountSigner pins signerType to 'createTransaction'", async () => {
             // Regression guard: the alternate "signPayload" route goes through
             // PJS and throws on unknown signed extensions (e.g. AsPgas on
-            // Paseo Next). If a future refactor drops the explicit pin and
-            // upstream's default ever flips back to signPayload, this would
-            // silently regress.
+            // Paseo Next). If a future refactor drops the explicit pin, this
+            // would silently regress.
             const rawAccounts: RawAccountTest[] = [
                 { publicKey: new Uint8Array(32).fill(0xaa), name: "Alice" },
             ];
             const mockProvider = createMockProvider({ accounts: rawAccounts });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
             });
             await provider.connect();
 
@@ -1089,7 +1024,8 @@ if (import.meta.vitest) {
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "myapp.dot", derivationIndex: 0 },
             });
             const result = await provider.connect();
@@ -1124,7 +1060,8 @@ if (import.meta.vitest) {
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "myapp.dot", requestName: false },
             });
             const result = await provider.connect();
@@ -1150,11 +1087,12 @@ if (import.meta.vitest) {
                 match: async (
                     _onOk: (v: { primaryUsername: string }) => unknown,
                     onErr: (e: unknown) => unknown,
-                ) => onErr({ tag: "v1", value: { tag: "GetUserIdErr::PermissionDenied" } }),
+                ) => onErr({ tag: "PermissionDenied" }),
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "myapp.dot" },
             });
             const result = await provider.connect();
@@ -1176,7 +1114,8 @@ if (import.meta.vitest) {
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "myapp.dot", requestName: false },
             });
             const connectResult = await provider.connect();
@@ -1205,7 +1144,8 @@ if (import.meta.vitest) {
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "myapp.dot", requestName: false },
             });
             await provider.connect();
@@ -1238,7 +1178,8 @@ if (import.meta.vitest) {
             });
             const provider = new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider)),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
                 productAccount: { dotNsIdentifier: "playground.dot" },
             });
             const result = await provider.connect();
@@ -1252,157 +1193,58 @@ if (import.meta.vitest) {
     });
 
     describe("ChainSubmit permission request", () => {
-        test("sends a v1 ChainSubmit request (regression guard for the TransactionSubmit bug)", async () => {
-            const captured: unknown[] = [];
-            const hostApi: HostApiPermissionBridge = {
-                permission: (request) => {
-                    captured.push(request);
-                    return fakeResult(undefined);
-                },
-            };
+        function providerWithPermission(
+            requestChainSubmitPermissionFn: (permission: RemotePermission) => Promise<boolean>,
+            extra?: Partial<HostProviderOptions>,
+        ) {
             const mockProvider = createMockProvider({
                 accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
             });
-            const provider = new HostProvider({
+            return new HostProvider({
                 maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn,
+                ...extra,
             });
+        }
 
-            await provider.connect();
+        test("requests the ChainSubmit permission on connect", async () => {
+            const requestFn = grantPermission();
+            await providerWithPermission(requestFn).connect();
 
-            expect(captured).toHaveLength(1);
-            // The fake hostApiEnum returns `{ version, value }` so we can
-            // assert on the exact wire shape that would reach
-            // host-api's RemotePermission codec.
-            expect(captured[0]).toEqual({
-                version: "v1",
-                value: { tag: "ChainSubmit", value: undefined },
-            });
-        });
-
-        test("does NOT send a TransactionSubmit tag (the bug)", async () => {
-            const captured: unknown[] = [];
-            const hostApi: HostApiPermissionBridge = {
-                permission: (request) => {
-                    captured.push(request);
-                    return fakeResult(undefined);
-                },
-            };
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
-            });
-
-            await provider.connect();
-
-            const sent = JSON.stringify(captured[0]);
-            expect(sent).not.toContain("TransactionSubmit");
-        });
-
-        test("skipped when sdk.hostApi is unavailable (older product-sdk)", async () => {
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider /* no hostApi */)),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
-            });
-
-            const result = await provider.connect();
-            // Connect should succeed even without the hostApi bridge —
-            // permission is best-effort.
-            expect(result.ok).toBe(true);
+            expect(requestFn).toHaveBeenCalledTimes(1);
+            expect(requestFn).toHaveBeenCalledWith({ tag: "ChainSubmit", value: undefined });
         });
 
         test("skipped when requestChainSubmitPermission is false", async () => {
-            const captured: unknown[] = [];
-            const hostApi: HostApiPermissionBridge = {
-                permission: (request) => {
-                    captured.push(request);
-                    return fakeResult(undefined);
-                },
-            };
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
+            const requestFn = grantPermission();
+            await providerWithPermission(requestFn, {
                 requestChainSubmitPermission: false,
-            });
-
-            await provider.connect();
-            expect(captured).toHaveLength(0);
+            }).connect();
+            expect(requestFn).not.toHaveBeenCalled();
         });
 
         test("deprecated requestTransactionSubmitPermission alias still controls the request", async () => {
-            const captured: unknown[] = [];
-            const hostApi: HostApiPermissionBridge = {
-                permission: (request) => {
-                    captured.push(request);
-                    return fakeResult(undefined);
-                },
-            };
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
-                // Old name; new code path should still respect it as `false`.
+            const requestFn = grantPermission();
+            await providerWithPermission(requestFn, {
                 requestTransactionSubmitPermission: false,
-            });
-
-            await provider.connect();
-            expect(captured).toHaveLength(0);
+            }).connect();
+            expect(requestFn).not.toHaveBeenCalled();
         });
 
-        test("connect succeeds even when permission request rejects", async () => {
-            // Whatever the host says about permission, connect() should
-            // still return ok — the consumer can sign later with whatever
-            // permission they negotiate.
-            const hostApi: HostApiPermissionBridge = {
-                permission: () => fakeResult(undefined, { tag: "PermissionDenied" }),
-            };
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.resolve(fakeHostApiEnum),
-            });
-
-            const result = await provider.connect();
+        test("connect succeeds even when the permission is denied", async () => {
+            const requestFn = vi
+                .fn<(permission: RemotePermission) => Promise<boolean>>()
+                .mockResolvedValue(false);
+            const result = await providerWithPermission(requestFn).connect();
             expect(result.ok).toBe(true);
         });
 
-        test("connect succeeds even when the hostApiEnum loader throws (codec drift)", async () => {
-            // The original bug: the v1 RemotePermission codec didn't
-            // recognize the TransactionSubmit tag and threw client-side.
-            // Even when something like that happens, connect() must
-            // remain ok — permission is best-effort.
-            const hostApi: HostApiPermissionBridge = {
-                permission: () => fakeResult(undefined),
-            };
-            const mockProvider = createMockProvider({
-                accounts: [{ publicKey: new Uint8Array(32).fill(0x01) }],
-            });
-            const provider = new HostProvider({
-                maxRetries: 1,
-                loadSdk: () => Promise.resolve(createMockSdk(mockProvider, { hostApi })),
-                loadHostApiEnum: () => Promise.reject(new Error("codec drift")),
-            });
-
-            const result = await provider.connect();
+        test("connect succeeds even when the permission request throws", async () => {
+            const requestFn = vi
+                .fn<(permission: RemotePermission) => Promise<boolean>>()
+                .mockRejectedValue(new Error("host unreachable"));
+            const result = await providerWithPermission(requestFn).connect();
             expect(result.ok).toBe(true);
         });
     });
@@ -1418,6 +1260,10 @@ if (import.meta.vitest) {
             expect(formatError(42)).toBe("42");
             expect(formatError(null)).toBe("null");
             expect(formatError(undefined)).toBe("undefined");
+        });
+
+        test("surfaces GenericError.reason when there is no tag", () => {
+            expect(formatError({ reason: "boom" })).toContain("boom");
         });
 
         test("surfaces inner Error name + message under the outer tag", () => {
@@ -1461,34 +1307,6 @@ if (import.meta.vitest) {
 
         test("formats a primitive inner value alongside the tag", () => {
             expect(formatError({ tag: "v1", value: "code-42" })).toBe("v1 (code-42)");
-        });
-    });
-
-    describe("RemotePermission codec interop", () => {
-        // Smoke test that the wire payload we build (`ChainSubmit`) round-trips
-        // through the real host-api codec. The previous bug shipped
-        // `TransactionSubmit`, which the codec rejects — locking this in here
-        // catches a regression at the codec layer without needing the host.
-        test("encodes ChainSubmit payload without throwing", async () => {
-            const { RemotePermission } = await import("@novasamatech/host-api");
-            const payload = { tag: "ChainSubmit" as const, value: undefined };
-            const encoded = RemotePermission.enc(payload);
-            expect(encoded).toBeInstanceOf(Uint8Array);
-            const decoded = RemotePermission.dec(encoded);
-            expect(decoded.tag).toBe("ChainSubmit");
-        });
-
-        test("rejects the legacy TransactionSubmit tag", async () => {
-            const { RemotePermission } = await import("@novasamatech/host-api");
-            // `TransactionSubmit` is not a valid variant in v1 — the codec
-            // should refuse to encode it. This proves the codec actually
-            // validates tags (so test 1 isn't a tautology).
-            expect(() =>
-                RemotePermission.enc({
-                    tag: "TransactionSubmit",
-                    value: undefined,
-                } as never),
-            ).toThrow();
         });
     });
 }
