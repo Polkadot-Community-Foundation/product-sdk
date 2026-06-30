@@ -48,8 +48,9 @@ export interface HostProviderOptions {
      */
     loadAccountsProvider?: () => Promise<AccountsProvider | null>;
     /**
-     * Custom `ChainSubmit` permission requester. Defaults to
-     * `@parity/product-sdk-host`'s `requestPermission`. Override for testing.
+     * Custom `ChainSubmit` permission requester. Defaults to a thin adapter over
+     * `@parity/product-sdk-host`'s `requestPermission` that unwraps its `Result`
+     * (throwing the typed error on the `err` channel). Override for testing.
      * @internal
      */
     requestChainSubmitPermissionFn?: (permission: RemotePermission) => Promise<boolean>;
@@ -181,6 +182,18 @@ async function defaultLoadAccountsProvider(): Promise<AccountsProvider | null> {
 }
 
 /**
+ * Default `requestChainSubmitPermissionFn`: bridge host's `Result`-returning
+ * {@link requestPermission} back to the option's `Promise<boolean>` contract by
+ * throwing the typed `HostError` on the `err` channel. The throw is caught
+ * (and warned, not fatal) at the connect-time call site.
+ */
+async function defaultRequestChainSubmitPermission(permission: RemotePermission): Promise<boolean> {
+    const result = await requestPermission(permission);
+    if (!result.ok) throw result.error;
+    return result.value;
+}
+
+/**
  * Provider for the Host API (Polkadot Desktop / Android).
  *
  * Backed by `@parity/product-sdk-host`'s `getAccountsProvider`, which talks to
@@ -216,7 +229,7 @@ export class HostProvider implements SignerProvider {
         this.retryDelay = options?.retryDelay ?? 500;
         this.loadAccountsProvider = options?.loadAccountsProvider ?? defaultLoadAccountsProvider;
         this.requestChainSubmitPermissionFn =
-            options?.requestChainSubmitPermissionFn ?? requestPermission;
+            options?.requestChainSubmitPermissionFn ?? defaultRequestChainSubmitPermission;
         // New name takes precedence; fall back to the deprecated alias.
         this.requestChainSubmitPermission =
             options?.requestChainSubmitPermission ??
@@ -898,6 +911,31 @@ if (import.meta.vitest) {
 
             expect(result.ok).toBe(true);
             expect(mockProvider.getProductAccount).toHaveBeenCalledWith("my-cli.dot", 0);
+        });
+
+        test("connect succeeds when the default ChainSubmit permission request fails", async () => {
+            // No `requestChainSubmitPermissionFn` override → the default adapter
+            // (`defaultRequestChainSubmitPermission`) calls host's real
+            // `requestPermission`, which returns `err` outside a container. The
+            // adapter unwraps that and throws; the connect step catches it
+            // (warn, non-fatal — see Step 4) so `connect()` still resolves.
+            const productPubkey = new Uint8Array(32).fill(0x55);
+            const mockProvider = createMockProvider({
+                accounts: [{ publicKey: productPubkey, name: undefined }],
+            });
+            const provider = new HostProvider({
+                maxRetries: 1,
+                dappName: "my-cli",
+                loadAccountsProvider: loadProvider(mockProvider),
+                // requestChainSubmitPermission defaults to true; no Fn override.
+            });
+
+            const result = await provider.connect();
+
+            expect(result.ok).toBe(true);
+            if (result.ok) {
+                expect(result.value).toHaveLength(1);
+            }
         });
 
         test("connect with dappName fallback resolves to [] when host rejects derivation", async () => {

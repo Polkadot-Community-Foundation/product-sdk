@@ -671,7 +671,14 @@ export class SignerManager {
 
         const ctx: ConnectContext = {
             signal: controller.signal,
-            requestResourceAllocation,
+            // Bridge host's `Result`-returning `requestResourceAllocation` back to
+            // the `ConnectContext` contract (`Promise<AllocationOutcome[]>`, throws
+            // on failure) by unwrapping the typed error on the `err` channel.
+            requestResourceAllocation: async (resources) => {
+                const result = await requestResourceAllocation(resources);
+                if (!result.ok) throw result.error;
+                return result.value;
+            },
         };
 
         // Defer so connect()/attemptReconnect() return before the callback fires —
@@ -887,6 +894,28 @@ if (import.meta.vitest) {
             await manager.connect("dev");
             await flush();
             expect(onConnect).toHaveBeenCalledTimes(1);
+            manager.destroy();
+        });
+
+        test("ctx.requestResourceAllocation unwraps host errors by throwing", async () => {
+            // The ctx helper adapts host's `Result`-returning
+            // `requestResourceAllocation` to the throwing `ConnectContext`
+            // contract. Outside a container the host call returns `err`, so the
+            // adapter must throw (not return a `Result` object).
+            let captured: ConnectContext | undefined;
+            const onConnect = vi.fn().mockImplementation((_account, ctx: ConnectContext) => {
+                captured = ctx;
+            });
+            const manager = new SignerManager({
+                createProvider: () => mockProvider(),
+                onConnect,
+            });
+            await manager.connect("dev");
+            await flush();
+            expect(captured).toBeDefined();
+            await expect(
+                captured?.requestResourceAllocation([{ tag: "AutoSigning", value: undefined }]),
+            ).rejects.toThrow();
             manager.destroy();
         });
 

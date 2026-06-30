@@ -39,7 +39,6 @@ export {
     createHostPreimageManager,
     requestResourceAllocation,
     createProofAuthorized,
-    formatHostError,
     // Hex helpers
     toHex,
     fromHex,
@@ -47,13 +46,24 @@ export {
 export type {
     TruApi,
     HexString,
-    HostError,
     PreimageManager,
     ResultAsync,
     AllocatableResource,
     AllocationOutcome,
     RemotePermission,
 } from "./truapi.js";
+
+// Result type + typed host errors (the throw→Result boundary)
+export { ok, err } from "./result.js";
+export type { Result } from "./result.js";
+export {
+    HostError,
+    HostUnavailableError,
+    HostCallFailedError,
+    isHostError,
+    formatHostError,
+} from "./errors.js";
+export type { HostErrorPayload } from "./errors.js";
 
 // Accounts — host wallet accounts, product accounts, Ring VRF, and signers.
 export { getAccountsProvider } from "./accounts.js";
