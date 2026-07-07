@@ -1,80 +1,86 @@
 // Copyright 2026 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 /**
- * Wrapper for the host's scheduled push-notification surface.
+ * Wrapper for the host's scheduled push-notification surface (RFC-0019),
+ * backed by `truApi.notifications.*`.
  *
- * Shipped flat-in-host rather than as `getTruApi().notification.*` because
- * the upstream JS `hostApi` is itself a flat object - there is no
- * `.notification` accessor to mirror. A flat `getNotificationManager()`
- * matches the singleton pattern already used by {@link getPaymentManager},
- * {@link getPreimageManager}, and {@link getHostLocalStorage}.
- *
- * Returns the shared `notificationManager` singleton from
- * `@novasamatech/host-api-wrapper` (not a fresh `createNotificationManager()`
- * instance) so callers share one wrapper + hostApi closure across the app.
- *
- * {@link PushNotificationError} is re-exported from `@novasamatech/host-api`
- * so consumers can branch on `err instanceof
- * PushNotificationError.ScheduleLimitReached` (the host's pending-notification
- * cap) without importing the novasama packages directly.
+ * `getNotificationManager()` returns a handle exposing `push(input)` (resolves
+ * to a {@link NotificationId}) and `cancel(id)`, matching the singleton
+ * pattern already used by {@link getPaymentManager}, {@link getPreimageManager},
+ * and {@link getHostLocalStorage}.
  *
  * @module
  */
 
-import { createLogger } from "@parity/product-sdk-logger";
+import type { HostPushNotificationRequest, NotificationId, TrUApiClient } from "@parity/truapi";
 
-import type { notificationManager } from "@novasamatech/host-api-wrapper";
-
-const log = createLogger("host:notifications");
+import { getClient } from "./transport.js";
+import { unwrapHostResult } from "./truapi.js";
 
 /**
  * Error variants the host raises when scheduling a push notification.
  *
- * A SCALE codec (with a `[Symbol.hasInstance]`), not a plain `Error`
- * subclass: branch with `err instanceof
- * PushNotificationError.ScheduleLimitReached` to detect the host's
- * platform-wide pending-notification cap, or `.Unknown` for everything
- * else. Re-exported from `@novasamatech/host-api` so consumers can
- * `instanceof`-branch without a direct novasama dependency.
+ * A `{ tag }` tagged union re-exported from `@parity/truapi`:
+ * `{ tag: "ScheduleLimitReached" }` (the host-wide pending-notification cap) or
+ * `{ tag: "Unknown"; value: { reason } }`. {@link NotificationManager.push} /
+ * {@link NotificationManager.cancel} reject with an `Error` whose `cause`
+ * carries this value, so branch on it — e.g.
+ * `(err as Error).cause?.tag === "ScheduleLimitReached"`.
  */
-export { PushNotificationError } from "@novasamatech/host-api";
+export type { HostPushNotificationError as PushNotificationError } from "@parity/truapi";
+
+/**
+ * Host-assigned id for a scheduled notification — pass to
+ * {@link NotificationManager.cancel}. Re-exported from `@parity/truapi`.
+ */
+export type { NotificationId };
+
+/**
+ * Push payload: `text`, an optional `deeplink`, and an optional `scheduledAt`
+ * (Unix timestamp in milliseconds; omit for immediate delivery). Re-exported
+ * from the truapi wire request type so the shape stays in lockstep with the
+ * protocol.
+ */
+export type PushNotificationInput = HostPushNotificationRequest;
 
 /**
  * Host notification manager handle. Exposes `push(input)` (resolves to a
  * {@link NotificationId}) and `cancel(id)`.
- *
- * Type identical to `notificationManager` from
- * `@novasamatech/host-api-wrapper`.
  */
-export type NotificationManager = typeof notificationManager;
+export interface NotificationManager {
+    push(input: PushNotificationInput): Promise<NotificationId>;
+    cancel(id: NotificationId): Promise<void>;
+}
+
+/** Build a {@link NotificationManager} over a TruAPI client's `notifications` domain. */
+function adaptNotificationManager(client: TrUApiClient): NotificationManager {
+    const notifications = client.notifications;
+    return {
+        async push(input) {
+            const response = await unwrapHostResult(
+                notifications.sendPushNotification(input),
+                "notification push failed",
+            );
+            return response.id;
+        },
+        async cancel(id) {
+            await unwrapHostResult(
+                notifications.cancelPushNotification({ id }),
+                "notification cancel failed",
+            );
+        },
+    };
+}
 
 /**
- * Host-assigned id for a scheduled notification — pass to
- * {@link NotificationManager.cancel}. Derived from the manager's `push`
- * return type so codec changes surface here as compile errors.
- */
-export type NotificationId = Awaited<ReturnType<NotificationManager["push"]>>;
-
-/**
- * Push payload: `text`, an optional `deeplink`, and an optional
- * `scheduledAt` (omit for immediate delivery). Derived from the manager's
- * `push` parameter so the shape stays in lockstep with upstream.
- */
-export type PushNotificationInput = Parameters<NotificationManager["push"]>[0];
-
-/**
- * Get the host notification manager.
- *
- * Returns the shared `notificationManager` singleton from
- * `@novasamatech/host-api-wrapper`, or `null` if the package is unavailable
- * (running outside a host container or the optional peer dep isn't
- * installed).
+ * Get the host notification manager, backed by `truApi.notifications.*`.
+ * Returns `null` when running outside a host container.
  *
  * @returns The notification manager, or `null` if unavailable.
  *
  * @example
  * ```ts
- * import { getNotificationManager, PushNotificationError } from "@parity/product-sdk-host";
+ * import { getNotificationManager, type PushNotificationError } from "@parity/product-sdk-host";
  *
  * const notifications = await getNotificationManager();
  * if (notifications) {
@@ -85,7 +91,8 @@ export type PushNotificationInput = Parameters<NotificationManager["push"]>[0];
  *     });
  *     // later: await notifications.cancel(id);
  *   } catch (err) {
- *     if (err instanceof PushNotificationError.ScheduleLimitReached) {
+ *     const cause = (err as Error).cause as PushNotificationError | undefined;
+ *     if (cause?.tag === "ScheduleLimitReached") {
  *       // host hit its pending-notification cap — surface to the user
  *     }
  *   }
@@ -93,31 +100,14 @@ export type PushNotificationInput = Parameters<NotificationManager["push"]>[0];
  * ```
  */
 export async function getNotificationManager(): Promise<NotificationManager | null> {
-    try {
-        const sdk = await import("@novasamatech/host-api-wrapper");
-        return sdk.notificationManager;
-    } catch (err) {
-        log.debug("getNotificationManager unavailable", err);
-        return null;
-    }
+    const client = await getClient();
+    return client ? adaptNotificationManager(client) : null;
 }
 
 if (import.meta.vitest) {
     const { test, expect } = import.meta.vitest;
 
-    test("getNotificationManager returns manager with push/cancel when SDK is available", async () => {
-        const notifications = await getNotificationManager();
-        if (notifications === null) {
-            // Acceptable: SDK couldn't load (e.g. peer dep missing in some envs).
-            return;
-        }
-        expect(typeof notifications.push).toBe("function");
-        expect(typeof notifications.cancel).toBe("function");
-    });
-
-    test("PushNotificationError is re-exported with its ScheduleLimitReached variant", async () => {
-        const { PushNotificationError } = await import("./notifications.js");
-        expect(PushNotificationError).toBeDefined();
-        expect(PushNotificationError.ScheduleLimitReached).toBeDefined();
+    test("getNotificationManager returns null outside a container", async () => {
+        expect(await getNotificationManager()).toBeNull();
     });
 }

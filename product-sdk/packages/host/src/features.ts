@@ -3,61 +3,62 @@
 /**
  * Higher-level wrappers for the host's feature-support probe.
  *
- * `hostApi.featureSupported` is reachable via {@link getTruApi}, but consumers
- * have to wrap the feature in the versioned envelope (`enumValue("v1", ...)`)
- * and unwrap the neverthrow `ResultAsync` themselves. {@link featureSupported}
- * collapses that to a throw-on-error Promise; {@link isChainSupported} is a
- * convenience over the only feature variant the host exposes today (`Chain`).
+ * `truApi.system.featureSupported` returns a neverthrow `ResultAsync`;
+ * {@link featureSupported} collapses that to a `Result` carrying the host's
+ * boolean answer. {@link isChainSupported} is a convenience over the only
+ * feature variant the host exposes today (`Chain`).
  *
  * @module
  */
 
 import { createLogger } from "@parity/product-sdk-logger";
 
-import { enumValue, formatHostError, getTruApi, type HexString } from "./truapi.js";
+import { type HostError, HostUnavailableError } from "./errors.js";
+import { type Result, err } from "./result.js";
+import { getTruApi, type HexString, mapHostResult } from "./truapi.js";
 
 const log = createLogger("host:features");
 
 /**
  * A feature the host can be probed for via {@link featureSupported}.
  *
- * As of `host-api` v0.8 the only variant is `Chain`, carrying the chain's
- * `0x`-prefixed genesis hash. Modeled locally (rather than derived from an
- * upstream codec) because the protocol exposes the feature only inline; new
- * variants surface here as a widening of the union.
+ * The only variant today is `Chain`, carrying the chain's `0x`-prefixed genesis
+ * hash. This is a flattened form of truapi's `HostFeatureSupportedRequest`,
+ * which nests the hash as `{ tag: "Chain"; value: { genesisHash } }` — we
+ * inline `value` as the `HexString` for ergonomics and re-nest it at the call
+ * site. New variants surface here as a widening of the union.
  */
 export type Feature = { tag: "Chain"; value: HexString };
 
 /**
  * Probe the host for support of a specific feature.
  *
- * Builds the `v1` envelope, calls `hostApi.featureSupported`, unwraps the
- * response, and returns the host's boolean answer.
+ * Calls `truApi.system.featureSupported`, unwraps the response, and returns the
+ * host's boolean answer.
  *
  * @param feature - The feature to probe for.
- * @returns `true` if the host supports the feature, `false` otherwise.
- * @throws If the host is unavailable or the probe fails (`GenericError`).
+ * @returns `ok(true)` if the host supports the feature, `ok(false)` otherwise,
+ *   or `err(HostUnavailableError | HostCallFailedError)`.
  *
  * @example
  * ```ts
  * import { featureSupported } from "@parity/product-sdk-host";
  *
- * const ok = await featureSupported({ tag: "Chain", value: genesisHash });
+ * const r = await featureSupported({ tag: "Chain", value: genesisHash });
+ * if (r.ok && r.value) { ... }
  * ```
  */
-export async function featureSupported(feature: Feature): Promise<boolean> {
+export async function featureSupported(feature: Feature): Promise<Result<boolean, HostError>> {
     const truApi = await getTruApi();
     if (!truApi) {
-        throw new Error("featureSupported: TruAPI unavailable");
+        return err(new HostUnavailableError("featureSupported: TruAPI unavailable"));
     }
     log.debug("featureSupported", { tag: feature.tag });
 
-    // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    return await truApi.featureSupported(enumValue("v1", feature)).match(
-        (envelope: { tag: "v1"; value: boolean }) => envelope.value,
-        (err: unknown) => {
-            throw new Error(`featureSupported failed: ${formatHostError(err)}`, { cause: err });
-        },
+    return mapHostResult(
+        truApi.system.featureSupported({ tag: feature.tag, value: { genesisHash: feature.value } }),
+        (response) => response.supported,
+        "featureSupported failed",
     );
 }
 
@@ -66,27 +67,30 @@ export async function featureSupported(feature: Feature): Promise<boolean> {
  * host? Wraps {@link featureSupported} for the `Chain` feature variant.
  *
  * @param genesisHash - The chain's `0x`-prefixed genesis hash.
- * @returns `true` if the host supports the chain, `false` otherwise.
- * @throws If the host is unavailable or the probe fails.
+ * @returns `ok(true)` if the host supports the chain, `ok(false)` otherwise, or
+ *   `err(HostUnavailableError | HostCallFailedError)`.
  *
  * @example
  * ```ts
  * import { isChainSupported } from "@parity/product-sdk-host";
  *
- * if (!(await isChainSupported(genesisHash))) {
+ * const r = await isChainSupported(genesisHash);
+ * if (!r.ok || !r.value) {
  *   tellUserChainUnavailable();
  * }
  * ```
  */
-export async function isChainSupported(genesisHash: HexString): Promise<boolean> {
-    return await featureSupported({ tag: "Chain", value: genesisHash });
+export async function isChainSupported(
+    genesisHash: HexString,
+): Promise<Result<boolean, HostError>> {
+    return featureSupported({ tag: "Chain", value: genesisHash });
 }
 
 if (import.meta.vitest) {
     const { test, expect, describe, vi } = import.meta.vitest;
 
     async function withMockedTruApi<T>(
-        bridge: { featureSupported?: (req: unknown) => unknown } | null,
+        bridge: { system?: { featureSupported?: (req: unknown) => unknown } } | null,
         fn: (mod: typeof import("./features.js")) => Promise<T>,
     ): Promise<T> {
         vi.resetModules();
@@ -95,7 +99,6 @@ if (import.meta.vitest) {
             return {
                 ...original,
                 getTruApi: async () => bridge,
-                enumValue: (version: string, value: unknown) => ({ tag: version, value }),
             };
         });
         try {
@@ -107,45 +110,53 @@ if (import.meta.vitest) {
         }
     }
 
-    const okBridge = (value: boolean) => ({
-        featureSupported: vi.fn().mockReturnValue({
-            match: async (onOk: (v: unknown) => unknown) => onOk({ tag: "v1", value }),
-        }),
+    const okBridge = (supported: boolean) => ({
+        system: {
+            featureSupported: vi.fn().mockReturnValue({
+                match: async (onOk: (v: unknown) => unknown) => onOk({ supported }),
+            }),
+        },
     });
 
     describe("featureSupported", () => {
-        test("throws when TruAPI is unavailable", async () => {
+        test("returns err(HostUnavailableError) when TruAPI is unavailable", async () => {
             await withMockedTruApi(null, async (mod) => {
-                await expect(mod.featureSupported({ tag: "Chain", value: "0x00" })).rejects.toThrow(
-                    /TruAPI unavailable/,
-                );
+                const result = await mod.featureSupported({ tag: "Chain", value: "0x00" });
+                expect(result.ok).toBe(false);
+                if (!result.ok) {
+                    expect(result.error.name).toBe("HostUnavailableError");
+                }
             });
         });
 
-        test("unwraps the v1 boolean outcome", async () => {
+        test("returns ok with the boolean outcome", async () => {
             await withMockedTruApi(okBridge(true), async (mod) => {
-                expect(await mod.featureSupported({ tag: "Chain", value: "0x00" })).toBe(true);
+                expect(await mod.featureSupported({ tag: "Chain", value: "0x00" })).toEqual({
+                    ok: true,
+                    value: true,
+                });
             });
         });
 
-        test("wraps host errors with a diagnostic message", async () => {
+        test("wraps host errors in err(HostCallFailedError) with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    featureSupported: vi.fn().mockReturnValue({
-                        match: async (
-                            _onOk: (v: unknown) => unknown,
-                            onErr: (e: unknown) => unknown,
-                        ) =>
-                            onErr({
-                                tag: "v1",
-                                value: { name: "GenericError", message: "boom" },
-                            }),
-                    }),
+                    system: {
+                        featureSupported: vi.fn().mockReturnValue({
+                            match: async (
+                                _onOk: (v: unknown) => unknown,
+                                onErr: (e: unknown) => unknown,
+                            ) => onErr({ reason: "boom" }),
+                        }),
+                    },
                 },
                 async (mod) => {
-                    await expect(
-                        mod.featureSupported({ tag: "Chain", value: "0x00" }),
-                    ).rejects.toThrow(/featureSupported failed: GenericError: boom/);
+                    const result = await mod.featureSupported({ tag: "Chain", value: "0x00" });
+                    expect(result.ok).toBe(false);
+                    if (!result.ok) {
+                        expect(result.error.name).toBe("HostCallFailedError");
+                        expect(result.error.message).toMatch(/featureSupported failed: boom/);
+                    }
                 },
             );
         });
@@ -154,7 +165,7 @@ if (import.meta.vitest) {
     describe("isChainSupported", () => {
         test("delegates to featureSupported with the Chain variant", async () => {
             await withMockedTruApi(okBridge(false), async (mod) => {
-                expect(await mod.isChainSupported("0x1234")).toBe(false);
+                expect(await mod.isChainSupported("0x1234")).toEqual({ ok: true, value: false });
             });
         });
     });

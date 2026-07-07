@@ -3,97 +3,92 @@
 /**
  * Higher-level wrappers for the host's transaction broadcast lifecycle.
  *
- * `hostApi.chainTransactionBroadcast` / `hostApi.chainTransactionStop` are
- * reachable via {@link getTruApi}, but consumers have to build the versioned
- * envelope (`enumValue("v1", ...)`) and unwrap the neverthrow `ResultAsync`
- * themselves. {@link broadcastTransaction} and {@link stopTransaction}
- * collapse that to throw-on-error Promises, mirroring the JSON-RPC
- * `transaction_v1_broadcast` / `transaction_v1_stop` pair they wrap.
+ * `truApi.chain.broadcastTransaction` / `truApi.chain.stopTransaction` are
+ * reachable via {@link getTruApi}, but consumers have to unwrap the neverthrow
+ * `ResultAsync` themselves. {@link broadcastTransaction} and
+ * {@link stopTransaction} collapse that to `Result`-returning Promises, mirroring
+ * the JSON-RPC `transaction_v1_broadcast` / `transaction_v1_stop` pair they
+ * wrap.
  *
  * @module
  */
 
 import { createLogger } from "@parity/product-sdk-logger";
 
-import { enumValue, formatHostError, getTruApi, type HexString } from "./truapi.js";
+import { type HostError, HostUnavailableError } from "./errors.js";
+import { type Result, err } from "./result.js";
+import { getTruApi, type HexString, mapHostResult } from "./truapi.js";
 
 const log = createLogger("host:chain-transaction");
 
 /**
  * Broadcast a signed transaction to the network via the host.
  *
- * Builds the `v1` envelope, calls `hostApi.chainTransactionBroadcast`, and
- * unwraps the response. The host keeps re-broadcasting until the transaction
- * is finalized/dropped or {@link stopTransaction} is called with the returned
- * operation id.
+ * Calls `truApi.chain.broadcastTransaction` and unwraps the response. The host
+ * keeps re-broadcasting until the transaction is finalized/dropped or
+ * {@link stopTransaction} is called with the returned operation id.
  *
  * @param genesisHash - The `0x`-prefixed genesis hash of the target chain.
  * @param transaction - The `0x`-prefixed SCALE-encoded signed transaction.
- * @returns The operation id to pass to {@link stopTransaction}, or `null` if
- *   the host accepted the broadcast without issuing one.
- * @throws If the host is unavailable or the broadcast fails (`GenericError`).
+ * @returns `ok` with the operation id to pass to {@link stopTransaction} (or
+ *   `null` if the host accepted the broadcast without issuing one), or
+ *   `err(HostUnavailableError | HostCallFailedError)`.
  *
  * @example
  * ```ts
  * import { broadcastTransaction, stopTransaction } from "@parity/product-sdk-host";
  *
- * const operationId = await broadcastTransaction(genesisHash, signedTx);
+ * const r = await broadcastTransaction(genesisHash, signedTx);
  * // later, to stop re-broadcasting:
- * if (operationId) await stopTransaction(genesisHash, operationId);
+ * if (r.ok && r.value) await stopTransaction(genesisHash, r.value);
  * ```
  */
 export async function broadcastTransaction(
     genesisHash: HexString,
     transaction: HexString,
-): Promise<string | null> {
+): Promise<Result<string | null, HostError>> {
     const truApi = await getTruApi();
     if (!truApi) {
-        throw new Error("broadcastTransaction: TruAPI unavailable");
+        return err(new HostUnavailableError("broadcastTransaction: TruAPI unavailable"));
     }
     log.debug("broadcastTransaction", { genesisHash });
 
-    // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    return await truApi
-        .chainTransactionBroadcast(enumValue("v1", { genesisHash, transaction }))
-        .match(
-            (envelope: { tag: "v1"; value: string | null }) => envelope.value,
-            (err: unknown) => {
-                throw new Error(`broadcastTransaction failed: ${formatHostError(err)}`, {
-                    cause: err,
-                });
-            },
-        );
+    return mapHostResult(
+        truApi.chain.broadcastTransaction({ genesisHash, transaction }),
+        (response) => response.operationId ?? null,
+        "broadcastTransaction failed",
+    );
 }
 
 /**
  * Stop an in-flight broadcast started by {@link broadcastTransaction}.
  *
- * Builds the `v1` envelope, calls `hostApi.chainTransactionStop`, and unwraps
- * the response.
+ * Calls `truApi.chain.stopTransaction` and unwraps the response.
  *
  * @param genesisHash - The `0x`-prefixed genesis hash of the target chain.
  * @param operationId - The operation id returned by
  *   {@link broadcastTransaction}.
- * @throws If the host is unavailable or the stop fails (`GenericError`).
+ * @returns `ok` on success, or `err(HostUnavailableError | HostCallFailedError)`.
  *
  * @example
  * ```ts
  * await stopTransaction(genesisHash, operationId);
  * ```
  */
-export async function stopTransaction(genesisHash: HexString, operationId: string): Promise<void> {
+export async function stopTransaction(
+    genesisHash: HexString,
+    operationId: string,
+): Promise<Result<void, HostError>> {
     const truApi = await getTruApi();
     if (!truApi) {
-        throw new Error("stopTransaction: TruAPI unavailable");
+        return err(new HostUnavailableError("stopTransaction: TruAPI unavailable"));
     }
     log.debug("stopTransaction", { genesisHash, operationId });
 
-    // `.match()` because the host returns a neverthrow ResultAsync, not a Promise.
-    await truApi.chainTransactionStop(enumValue("v1", { genesisHash, operationId })).match(
-        (_envelope: { tag: "v1"; value: undefined }) => undefined,
-        (err: unknown) => {
-            throw new Error(`stopTransaction failed: ${formatHostError(err)}`, { cause: err });
-        },
+    return mapHostResult(
+        truApi.chain.stopTransaction({ genesisHash, operationId }),
+        () => undefined,
+        "stopTransaction failed",
     );
 }
 
@@ -102,8 +97,10 @@ if (import.meta.vitest) {
 
     async function withMockedTruApi<T>(
         bridge: {
-            chainTransactionBroadcast?: (req: unknown) => unknown;
-            chainTransactionStop?: (req: unknown) => unknown;
+            chain?: {
+                broadcastTransaction?: (req: unknown) => unknown;
+                stopTransaction?: (req: unknown) => unknown;
+            };
         } | null,
         fn: (mod: typeof import("./chain-transaction.js")) => Promise<T>,
     ): Promise<T> {
@@ -113,7 +110,6 @@ if (import.meta.vitest) {
             return {
                 ...original,
                 getTruApi: async () => bridge,
-                enumValue: (version: string, value: unknown) => ({ tag: version, value }),
             };
         });
         try {
@@ -125,86 +121,119 @@ if (import.meta.vitest) {
         }
     }
 
-    const ok = (value: unknown) => ({
-        match: async (onOk: (v: unknown) => unknown) => onOk({ tag: "v1", value }),
+    /** A resolved ResultAsync stub yielding the given response object. */
+    const ok = (response: unknown) => ({
+        match: async (onOk: (v: unknown) => unknown) => onOk(response),
     });
-    const errResult = (name: string, message: string) => ({
+    /** A rejected ResultAsync stub yielding a truapi `GenericError` (`{ reason }`). */
+    const errResult = (reason: string) => ({
         match: async (_onOk: (v: unknown) => unknown, onErr: (e: unknown) => unknown) =>
-            onErr({ tag: "v1", value: { name, message } }),
+            onErr({ reason }),
     });
 
     describe("broadcastTransaction", () => {
-        test("throws when TruAPI is unavailable", async () => {
+        test("returns err(HostUnavailableError) when TruAPI is unavailable", async () => {
             await withMockedTruApi(null, async (mod) => {
-                await expect(mod.broadcastTransaction("0x00", "0x01")).rejects.toThrow(
-                    /TruAPI unavailable/,
-                );
+                const result = await mod.broadcastTransaction("0x00", "0x01");
+                expect(result.ok).toBe(false);
+                if (!result.ok) {
+                    expect(result.error.name).toBe("HostUnavailableError");
+                }
             });
         });
 
-        test("unwraps the operation id", async () => {
-            await withMockedTruApi(
-                { chainTransactionBroadcast: vi.fn().mockReturnValue(ok("op-1")) },
-                async (mod) => {
-                    expect(await mod.broadcastTransaction("0x00", "0x01")).toBe("op-1");
-                },
-            );
-        });
-
-        test("passes through a null operation id", async () => {
-            await withMockedTruApi(
-                { chainTransactionBroadcast: vi.fn().mockReturnValue(ok(null)) },
-                async (mod) => {
-                    expect(await mod.broadcastTransaction("0x00", "0x01")).toBeNull();
-                },
-            );
-        });
-
-        test("wraps host errors with a diagnostic message", async () => {
+        test("returns ok with the operation id", async () => {
             await withMockedTruApi(
                 {
-                    chainTransactionBroadcast: vi
-                        .fn()
-                        .mockReturnValue(errResult("GenericError", "boom")),
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(ok({ operationId: "op-1" })),
+                    },
                 },
                 async (mod) => {
-                    await expect(mod.broadcastTransaction("0x00", "0x01")).rejects.toThrow(
-                        /broadcastTransaction failed: GenericError: boom/,
-                    );
+                    expect(await mod.broadcastTransaction("0x00", "0x01")).toEqual({
+                        ok: true,
+                        value: "op-1",
+                    });
+                },
+            );
+        });
+
+        test("passes through a missing operation id as ok(null)", async () => {
+            await withMockedTruApi(
+                {
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(ok({})),
+                    },
+                },
+                async (mod) => {
+                    expect(await mod.broadcastTransaction("0x00", "0x01")).toEqual({
+                        ok: true,
+                        value: null,
+                    });
+                },
+            );
+        });
+
+        test("wraps host errors in err(HostCallFailedError) with a diagnostic message", async () => {
+            await withMockedTruApi(
+                {
+                    chain: {
+                        broadcastTransaction: vi.fn().mockReturnValue(errResult("boom")),
+                    },
+                },
+                async (mod) => {
+                    const result = await mod.broadcastTransaction("0x00", "0x01");
+                    expect(result.ok).toBe(false);
+                    if (!result.ok) {
+                        expect(result.error.name).toBe("HostCallFailedError");
+                        expect(result.error.message).toMatch(/broadcastTransaction failed: boom/);
+                    }
                 },
             );
         });
     });
 
     describe("stopTransaction", () => {
-        test("throws when TruAPI is unavailable", async () => {
+        test("returns err(HostUnavailableError) when TruAPI is unavailable", async () => {
             await withMockedTruApi(null, async (mod) => {
-                await expect(mod.stopTransaction("0x00", "op-1")).rejects.toThrow(
-                    /TruAPI unavailable/,
-                );
+                const result = await mod.stopTransaction("0x00", "op-1");
+                expect(result.ok).toBe(false);
+                if (!result.ok) {
+                    expect(result.error.name).toBe("HostUnavailableError");
+                }
             });
         });
 
-        test("resolves on the v1 success envelope", async () => {
+        test("returns ok on success", async () => {
             await withMockedTruApi(
-                { chainTransactionStop: vi.fn().mockReturnValue(ok(undefined)) },
+                {
+                    chain: {
+                        stopTransaction: vi.fn().mockReturnValue(ok(undefined)),
+                    },
+                },
                 async (mod) => {
-                    await expect(mod.stopTransaction("0x00", "op-1")).resolves.toBeUndefined();
+                    expect(await mod.stopTransaction("0x00", "op-1")).toEqual({
+                        ok: true,
+                        value: undefined,
+                    });
                 },
             );
         });
 
-        test("wraps host errors with a diagnostic message", async () => {
+        test("wraps host errors in err(HostCallFailedError) with a diagnostic message", async () => {
             await withMockedTruApi(
                 {
-                    chainTransactionStop: vi
-                        .fn()
-                        .mockReturnValue(errResult("GenericError", "boom")),
+                    chain: {
+                        stopTransaction: vi.fn().mockReturnValue(errResult("boom")),
+                    },
                 },
                 async (mod) => {
-                    await expect(mod.stopTransaction("0x00", "op-1")).rejects.toThrow(
-                        /stopTransaction failed: GenericError: boom/,
-                    );
+                    const result = await mod.stopTransaction("0x00", "op-1");
+                    expect(result.ok).toBe(false);
+                    if (!result.ok) {
+                        expect(result.error.name).toBe("HostCallFailedError");
+                        expect(result.error.message).toMatch(/stopTransaction failed: boom/);
+                    }
                 },
             );
         });
