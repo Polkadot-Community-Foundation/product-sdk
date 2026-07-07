@@ -13,8 +13,7 @@ export default defineConfig({
     define: {
         "import.meta.vitest": "undefined",
     },
-    // Mark novasama packages as external: they're runtime dependencies that are
-    // dynamically imported (host-api-wrapper) or statically re-exported (host-api),
-    // resolved from the consumer's node_modules rather than bundled.
-    external: ["@novasamatech/host-api-wrapper", "@novasamatech/host-api"],
+    // `@parity/truapi` is a hard runtime dependency, kept external so it's
+    // imported at runtime rather than inlined into the host bundle.
+    external: ["@parity/truapi"],
 });
