@@ -31,7 +31,7 @@ permissions:
 jobs:
     check:
         name: "Check descriptor drift"
-        runs-on: parity-default
+        runs-on: ubuntu-latest
         timeout-minutes: 15
         permissions:
             contents: read

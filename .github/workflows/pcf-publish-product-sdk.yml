@@ -1,0 +1,98 @@
+name: "PCF: Publish product-sdk (rescoped)"
+
+# PCF-only publish path, separate from the upstream `product-sdk-release.yml`
+# (which is gated off in this fork — it targets Parity's automation + secrets +
+# self-hosted runners). Maintainer-triggered `workflow_dispatch`. Builds the
+# workspace, rescopes-at-pack the three devnet-carrying packages
+# (descriptors / chain-client / host) into pack-output/*.tgz, and dispatches to
+# PCF's own npm-publish-automation (which holds the @polkadot-community-foundation
+# npm token). Same inline-dispatch pattern as polkadot-app-deploy / cdm-env.
+#
+# Two human gates protect a publish: (1) the `npm-publish` GitHub Environment
+# approval below, then (2) the npm staged-package approval on npmjs.com.
+
+on:
+  workflow_dispatch:
+    inputs:
+      npm_tag:
+        description: "npm dist-tag to publish under (latest | rc | ...)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pcf-publish-product-sdk
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: product-sdk
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    # Human gate 1: `npm-publish` is a protected Environment (required reviewer)
+    # so a maintainer must approve before this job runs.
+    environment: npm-publish
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+          cache-dependency-path: product-sdk/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      # Rescope-at-pack: stage @polkadot-community-foundation/product-sdk-{descriptors,
+      # chain-client,host} tarballs into product-sdk/pack-output/. Keeps the
+      # in-tree @parity/* names (merge-clean with upstream). Cross-deps AMONG the
+      # three are rewritten to the new scope; every other @parity/* dep stays
+      # @parity (must be published on npm — script WARNs otherwise).
+      - name: Stage PCF-scoped tarballs (rescope-at-pack)
+        run: node scripts/rescope-pack.mjs
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: product-sdk
+          path: product-sdk/pack-output/*.tgz
+          if-no-files-found: error
+
+      # Publish via PCF's own npm-publish-automation (holds the
+      # @polkadot-community-foundation npm token), NOT paritytech's. Dispatch is
+      # inlined (public create-github-app-token + a gh api call) rather than the
+      # automation's composite action, because sharing a PRIVATE repo's actions
+      # cross-repo is plan-gated on a Free org.
+      - name: Mint App token (dispatch scope)
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.PUBLISH_APP_ID }}
+          private-key: ${{ secrets.PUBLISH_APP_PRIVATE_KEY }}
+          owner: Polkadot-Community-Foundation
+          repositories: npm-publish-automation
+
+      - name: Dispatch PCF npm-publish-automation
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          NPM_TAG: ${{ inputs.npm_tag }}
+        run: |
+          set -euo pipefail
+          printf '{"ref":"main","inputs":{"repo":"%s","run_id":"%s","artifact_name":"product-sdk","npm_tag":"%s"}}' \
+            "${{ github.repository }}" "${{ github.run_id }}" "$NPM_TAG" \
+          | gh api -X POST \
+              /repos/Polkadot-Community-Foundation/npm-publish-automation/actions/workflows/publish.yml/dispatches \
+              --input -

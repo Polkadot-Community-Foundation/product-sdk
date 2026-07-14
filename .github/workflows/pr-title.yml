@@ -23,7 +23,7 @@ jobs:
       # Read-only access to PR title + metadata; no write needed.
       pull-requests: read
     name: Validate PR Title
-    runs-on: parity-default
+    runs-on: ubuntu-latest
     steps:
       - name: semantic-pull-request
         uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6

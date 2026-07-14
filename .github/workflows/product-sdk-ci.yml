@@ -30,7 +30,7 @@ defaults:
 jobs:
   check:
     name: "product-sdk: Lint & Format"
-    runs-on: parity-default
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -54,7 +54,7 @@ jobs:
 
   build:
     name: "product-sdk: Build"
-    runs-on: parity-default
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
@@ -78,7 +78,7 @@ jobs:
 
   test:
     name: "product-sdk: Test"
-    runs-on: parity-default
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
