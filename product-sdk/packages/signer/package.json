@@ -11,6 +11,10 @@
         ".": {
             "import": "./dist/index.js",
             "types": "./dist/index.d.ts"
+        },
+        "./testing": {
+            "import": "./dist/testing.js",
+            "types": "./dist/testing.d.ts"
         }
     },
     "files": ["dist", "src"],
@@ -24,6 +28,8 @@
         "@parity/product-sdk-host": "workspace:*",
         "@parity/product-sdk-keys": "workspace:*",
         "@parity/product-sdk-logger": "workspace:*",
+        "@parity/product-sdk-errors": "workspace:*",
+        "@parity/result": "workspace:*",
         "polkadot-api": "catalog:"
     },
     "devDependencies": {
