@@ -6,13 +6,15 @@
  */
 
 /**
- * Bulletin Chain RPC endpoints per network environment. `paseo` and `summit`
- * are populated today; `polkadot` and `kusama` are reserved for when those
- * Bulletin deployments go live.
+ * Bulletin Chain RPC endpoints per network environment. `paseo`, `summit` and
+ * `devnet` (the public PCF products devnet on standard Paseo) are populated
+ * today; `polkadot` and `kusama` are reserved for when those Bulletin
+ * deployments go live.
  */
 export const BULLETIN_RPCS = {
     paseo: ["wss://paseo-bulletin-next-rpc.polkadot.io"],
     summit: ["wss://summit-bulletin-rpc.polkadot.io"],
+    devnet: ["wss://bulletin-paseo.tservices.es:8443"],
     polkadot: [] as string[],
     kusama: [] as string[],
 } as const;
@@ -32,6 +34,11 @@ if (import.meta.vitest) {
         test("BULLETIN_RPCS has summit endpoint", () => {
             expect(BULLETIN_RPCS.summit.length).toBeGreaterThan(0);
             expect(BULLETIN_RPCS.summit[0]).toMatch(/^wss:\/\//);
+        });
+
+        test("BULLETIN_RPCS has devnet endpoint", () => {
+            expect(BULLETIN_RPCS.devnet.length).toBeGreaterThan(0);
+            expect(BULLETIN_RPCS.devnet[0]).toMatch(/^wss:\/\//);
         });
 
         test("BULLETIN_RPCS polkadot and kusama are empty until live", () => {
