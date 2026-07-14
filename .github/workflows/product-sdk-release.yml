@@ -26,7 +26,15 @@ defaults:
 
 jobs:
     release:
-        if: github.event.workflow_run.conclusion == 'success'
+        # PCF fork: this upstream release job dispatches to paritytech's
+        # `npm_publish_automation` using Parity-only secrets (APP_ID /
+        # APP_PRIVATE_KEY / NPM_PUBLISH_AUTOMATION_TOKEN) and self-hosted
+        # `parity-default` runners — none of which exist in the PCF org. It is
+        # gated off so it never runs (and never fails) here. The PCF publish
+        # path is `.github/workflows/pcf-publish-product-sdk.yml`
+        # (rescope-at-pack → PCF npm-publish-automation). Kept in-tree unchanged
+        # otherwise to stay merge-clean with upstream.
+        if: false && github.event.workflow_run.conclusion == 'success'
         runs-on: parity-default
         environment: main
         permissions:
