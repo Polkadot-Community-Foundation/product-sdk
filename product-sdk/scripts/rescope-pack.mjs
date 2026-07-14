@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * rescope-pack.mjs — stage PCF-scoped tarballs of the three devnet-carrying
+ * rescope-pack.mjs — stage PCF-scoped tarballs of the devnet-carrying
  * product-sdk packages without renaming them in-tree.
  *
  * Why: this repo is the PCF fork of paritytech/product-sdk. The packages stay
@@ -10,19 +10,24 @@
  * under its own scope, so the dotns UI + playground-constellation can consume
  * devnet. Mirrors polkadot-app-deploy + cdm-env + browse-sdk rescope-at-pack.
  *
- * Only these three packages are rescoped (they carry the devnet changes and the
- * consumers import them):
+ * Five packages are rescoped — the three that carry the devnet changes / are
+ * imported by the consumers, plus the two zero-dependency leaf packages `host`
+ * transitively needs (they are NOT published on the @parity npm scope, so they
+ * must also be PCF-scoped for the graph to fully close):
  *   @parity/product-sdk-descriptors   -> @polkadot-community-foundation/product-sdk-descriptors
  *   @parity/product-sdk-chain-client  -> @polkadot-community-foundation/product-sdk-chain-client
  *   @parity/product-sdk-host          -> @polkadot-community-foundation/product-sdk-host
- * The other 6 product-sdk packages stay @parity (mixed scope resolves fine as
- * long as the referenced @parity versions are published on npm — see WARN below).
+ *   @parity/product-sdk-errors        -> @polkadot-community-foundation/product-sdk-errors
+ *   @parity/result                    -> @polkadot-community-foundation/result   (base name kept, no product-sdk- prefix)
+ * Every other @parity/* dep left in a rescoped tarball (e.g. product-sdk-logger,
+ * truapi) stays @parity and MUST already be published on npm — the script logs
+ * each one so CI surfaces any that is not.
  *
  * Assumes the packages are already built (`pnpm build` ran in CI before this).
  * Step 1 uses `pnpm pack` (NOT `npm pack`) so pnpm resolves the `workspace:*`
  * and `catalog:` protocols to concrete versions/ranges. Then we rewrite `name`
- * and rewrite any cross-dependency AMONG the three rescoped packages to the new
- * scope, and repack with `npm pack` (deps are concrete by then).
+ * and rewrite any cross-dependency AMONG the rescoped packages to the new scope,
+ * and repack with `npm pack` (deps are concrete by then).
  */
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -35,12 +40,18 @@ const PKGS_DIR = join(WORKSPACE_DIR, "packages");
 const OUT_DIR = join(WORKSPACE_DIR, "pack-output");
 const NEW_SCOPE = "@polkadot-community-foundation";
 
-// in-tree package dir -> in-tree @parity name. These three are the rescope set;
-// a cross-dependency on any of them (by @parity name) is rewritten to NEW_SCOPE.
+// in-tree package dir -> in-tree @parity name. These are the rescope set; a
+// cross-dependency on any of them (by @parity name) is rewritten to NEW_SCOPE.
+// `errors` + `result` are included so `host`'s (and chain-client's transitive)
+// deps on them resolve to PCF-scoped, published names — they have no @parity
+// npm release. `rescopedName` maps @parity/result -> @polkadot-community-foundation/result
+// (no product-sdk- prefix) and @parity/product-sdk-errors -> .../product-sdk-errors.
 const RESCOPE = {
     descriptors: "@parity/product-sdk-descriptors",
     "chain-client": "@parity/product-sdk-chain-client",
     host: "@parity/product-sdk-host",
+    errors: "@parity/product-sdk-errors",
+    result: "@parity/result",
 };
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
@@ -49,6 +60,12 @@ const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: ["ignore", "pipe", "inheri
 
 if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true });
 mkdirSync(OUT_DIR, { recursive: true });
+
+// @parity/* deps that are legitimately left at @parity because they ARE
+// published on npm (verified: product-sdk-logger@0.1.1, truapi@0.3.2). Any kept
+// @parity dep NOT in this set is flagged loudly — it would make the tarball
+// uninstallable.
+const KNOWN_PUBLISHED_PARITY = new Set(["@parity/product-sdk-logger", "@parity/truapi"]);
 
 const results = [];
 let sawUnpublishedRisk = false;
@@ -80,13 +97,12 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
                 delete deps[depName];
                 deps[rescopedName(depName)] = version;
             } else if (depName.startsWith("@parity/")) {
-                // Left at @parity — flag so CI logs surface any dep that is NOT
-                // published on npm (would make the rescoped tarball uninstallable).
+                // Left at @parity — must already be published on npm.
                 console.log(`[rescope-pack]   ${pkg.name} keeps @parity dep ${depName}@${deps[depName]}`);
-                if (depName === "@parity/product-sdk-errors" || depName === "@parity/result") {
+                if (!KNOWN_PUBLISHED_PARITY.has(depName)) {
                     console.log(
-                        `[rescope-pack]   ⚠️  WARN: ${depName}@${deps[depName]} is NOT published on npm ` +
-                            `-> ${pkg.name} will be UNINSTALLABLE until it is published (or also rescoped).`,
+                        `[rescope-pack]   ⚠️  WARN: ${depName}@${deps[depName]} is not in the known-published ` +
+                            `@parity set -> verify it is on npm, or ${pkg.name} will be UNINSTALLABLE.`,
                     );
                     sawUnpublishedRisk = true;
                 }
@@ -114,7 +130,12 @@ for (const f of readdirSync(OUT_DIR).filter((f) => f.endsWith(".tgz"))) {
 }
 if (sawUnpublishedRisk) {
     console.log(
-        "\n[rescope-pack] ⚠️  One or more rescoped tarballs reference an UNPUBLISHED @parity dep " +
-            "(see WARN above). They will publish but stay uninstallable until those deps land on npm.",
+        "\n[rescope-pack] ⚠️  One or more rescoped tarballs keep an @parity dep outside the known-published " +
+            "set (see WARN above). Verify it is on npm, or the tarball will be uninstallable.",
+    );
+} else {
+    console.log(
+        "\n[rescope-pack] ✓ Graph closed: every dep in every rescoped tarball is either PCF-scoped (in-set) " +
+            "or a published @parity/third-party package.",
     );
 }
