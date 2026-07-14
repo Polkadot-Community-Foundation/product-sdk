@@ -56,6 +56,51 @@ const RESCOPE = {
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
 
+// Rewriting the package.json alone is not enough: the COMPILED code shipped in
+// dist/ still contains `import ... from "@parity/result"` (and the four other
+// rescoped specifiers), which are no longer declared deps of the rescoped
+// package -> a consumer bundler (Rollup/vite) fails to resolve them. So after
+// packing we also rewrite those specifiers inside the shipped text files.
+//
+// Only the five rescoped names are rewritten, and only as WHOLE specifiers: the
+// negative lookahead `(?![A-Za-z0-9-])` forbids a trailing identifier/dash char
+// so `@parity/product-sdk-logger`, `@parity/product-sdk-*` (a JSDoc glob) and
+// any other longer @parity name are left untouched, while a subpath like
+// `@parity/product-sdk-host/testing` is still rewritten (the `/` is a boundary).
+const REWRITE_EXTS = [".js", ".mjs", ".cjs", ".d.ts", ".d.mts", ".d.cts", ".map"];
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const SPEC_REWRITES = [...RESCOPE_NAMES].map((name) => ({
+    re: new RegExp(`${escapeRe(name)}(?![A-Za-z0-9-])`, "g"),
+    to: rescopedName(name),
+}));
+
+// Recursively list files under `dir` whose name ends with a rewrite extension.
+const listRewriteTargets = (dir) => {
+    const out = [];
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        const p = join(dir, entry.name);
+        if (entry.isDirectory()) out.push(...listRewriteTargets(p));
+        else if (entry.isFile() && REWRITE_EXTS.some((ext) => entry.name.endsWith(ext))) out.push(p);
+    }
+    return out;
+};
+
+// Rewrite the five rescoped specifiers in every shipped text file under `root`.
+// Returns the number of files changed.
+const rewriteDistSpecifiers = (root) => {
+    let changed = 0;
+    for (const file of listRewriteTargets(root)) {
+        const before = readFileSync(file, "utf8");
+        let after = before;
+        for (const { re, to } of SPEC_REWRITES) after = after.replace(re, to);
+        if (after !== before) {
+            writeFileSync(file, after);
+            changed++;
+        }
+    }
+    return changed;
+};
+
 const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: ["ignore", "pipe", "inherit"] }).toString().trim();
 
 if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true });
@@ -115,6 +160,13 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     // with --ignore-scripts).
     if (pkg.scripts) delete pkg.scripts.prepare;
     writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + "\n");
+
+    // Step 1b: rewrite the five rescoped specifiers inside the extracted,
+    // shipped code (dist/ + any source) so the compiled imports/requires match
+    // the rescoped names. Without this the tarball's package.json is PCF-scoped
+    // but its dist code still `import`s `@parity/result` etc. -> unresolvable.
+    const rewritten = rewriteDistSpecifiers(join(stage, "package"));
+    console.log(`[rescope-pack]   ${pkg.name} rewrote rescoped specifiers in ${rewritten} shipped file(s)`);
 
     // Step 2: repack with the rewritten package.json (deps are concrete now).
     run(`npm pack --ignore-scripts --pack-destination ${OUT_DIR}`, join(stage, "package"));
