@@ -9,7 +9,13 @@ export {
 export type { TerminalAdapterOptions, TerminalAdapter } from "./adapter.js";
 
 // Session Signer
-export { createSessionSigner, createSessionSignerForAccount } from "./signer.js";
+export {
+    createSessionSigner,
+    createSessionSignerForAccount,
+    deriveProductPublicKey,
+    sessionRootPublicKey,
+    INCOMPLETE_SESSION_MESSAGE,
+} from "./signer.js";
 export type { ProductAccountRef } from "./signer.js";
 
 // Allowance service — `adapter.allowance` lives on every TerminalAdapter (inherited
@@ -28,6 +34,19 @@ export {
 } from "./allowance.js";
 export { AllowanceError } from "@novasamatech/host-papp";
 export type { AllowanceService, AllowanceErrorReason } from "@novasamatech/host-papp";
+
+// Resource allocation (RFC-0010). `requestResourceAllocation` is the cached,
+// adapter-scoped entry point; `sendResourceAllocation` is the raw wire call for
+// consumers that hold only a productId and manage their own policy. The
+// resource / outcome types are derived from `UserSession` so they can't drift
+// from the host codec.
+export { requestResourceAllocation, sendResourceAllocation } from "./host.js";
+export type {
+    AllocatableResource,
+    ApAllocationOutcome,
+    OnExistingAllowancePolicy,
+    RequestResourceAllocationOptions,
+} from "./host.js";
 
 // Session helpers
 export { waitForSessions } from "./sessions.js";
