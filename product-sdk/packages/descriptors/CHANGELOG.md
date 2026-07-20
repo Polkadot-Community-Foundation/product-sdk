@@ -1,5 +1,24 @@
 # @parity/product-sdk-descriptors
 
+## 0.8.0
+
+### Minor Changes
+
+- c3fccfa: **Breaking: remove the Summit Network (Web3 Summit) environment.**
+
+  The Summit event is over and its chains are being decommissioned. Removes
+  the `summit-asset-hub`, `summit-bulletin`, and `summit-individuality`
+  descriptors, `"summit"` from `Environment` / `CloudStorageEnvironment`
+  (`getChainAPI("summit")` and `CloudStorageClient.create({ environment:
+"summit" })` no longer compile), the `CloudStorageNetworks.summit` preset,
+  and `BULLETIN_RPCS.summit`. `paseo` and `devnet` are unaffected.
+
+### Patch Changes
+
+- c3fccfa: Regenerate PAPI descriptors against current live-chain runtime metadata for `devnet-asset-hub`, `devnet-individuality`, `kusama-asset-hub`, `paseo-asset-hub`, `paseo-bulletin`, `paseo-individuality`, and `polkadot-asset-hub` (issue #242). `devnet-bulletin` was already at the live `codeHash` and is unchanged. (`devnet-individuality` was reported unreachable when the issue was generated but its RPC was reachable at regeneration time and it had also drifted.)
+
+  No source-level API surface changes for consumers — this refreshes the bundled `.scale` metadata blobs and re-pins the `codeHash` in each chain's `.papi/polkadot-api.json` so PAPI's type bindings match the live runtime (genesis is unchanged for every chain). Stale bindings can otherwise manifest as `Incompatible runtime entry RuntimeCall(...)` errors or silent subscription mis-decodes.
+
 ## 0.7.0
 
 ### Minor Changes

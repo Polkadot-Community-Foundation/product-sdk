@@ -1,5 +1,63 @@
 # @parity/product-sdk
 
+## 0.19.0
+
+### Minor Changes
+
+- c3fccfa: **Breaking: remove the Summit Network (Web3 Summit) environment.**
+
+  The Summit event is over and its chains are being decommissioned. Removes
+  the `summit-asset-hub`, `summit-bulletin`, and `summit-individuality`
+  descriptors, `"summit"` from `Environment` / `CloudStorageEnvironment`
+  (`getChainAPI("summit")` and `CloudStorageClient.create({ environment:
+"summit" })` no longer compile), the `CloudStorageNetworks.summit` preset,
+  and `BULLETIN_RPCS.summit`. `paseo` and `devnet` are unaffected.
+
+- c3fccfa: **Update `@parity/truapi` to 0.5.0 (versioned call errors, CoinPayment, Ring
+  VRF redesign).**
+
+  truapi 0.4 wraps every call error in its canonical `CallErrorValue`
+  envelope: domain failures arrive as `{ tag: "Domain", value: { tag: "V1",
+value: <domain error> } }`, alongside the transport-level `Denied` /
+  `Unsupported` / `MalformedFrame` / `HostFailure` variants. truapi 0.5
+  reworks the Ring VRF surface around product-scoped proof contexts. The SDK
+  tracks the protocol:
+
+  - `AccountsProvider` lookup methods now carry
+    `CallErrorValue<Versioned…Error>` on their `err` channel instead of the
+    bare per-domain error unions.
+  - `HostErrorPayload` is now the `CallErrorValue` envelope itself
+    (protocol-sourced, replacing the previous hand-widened union), and
+    `formatHostError` / `HostCallFailedError` messages unwrap the `Domain`
+    envelope down to the domain error, so rendered messages read as before.
+  - **Ring VRF**: `getProductAccountAlias` and `createRingVRFProof` (on
+    `AccountsProvider`, `SignerManager`, and the signer's `HostProvider`)
+    now take a `ProductProofContext` (`{ productId, suffix }`) plus the
+    restructured `RingLocation` (`{ chainId, junctions }`) — the host
+    selects the ring member key, so per-account `dotNsIdentifier` /
+    `derivationIndex` addressing is gone. `createRingVRFProof` returns a
+    `RingVRFProof` (`{ proof, contextualAlias, ringIndex, ringRevision }`)
+    instead of bare proof bytes, carrying the values needed to verify the
+    proof downstream.
+  - `PaymentManager` purse parameters follow truapi's rename of
+    `PaymentPurseId` to `CoinPaymentPurseId` (same underlying type).
+  - The `createFakeTruApiClient` test fake covers the new `coinPayment`
+    domain as an unmodeled (throwing) surface and the richer Ring VRF proof
+    response.
+
+### Patch Changes
+
+- Updated dependencies [c3fccfa]
+- Updated dependencies [c3fccfa]
+  - @parity/product-sdk-host@0.14.0
+  - @parity/product-sdk-cloud-storage@0.8.0
+  - @parity/product-sdk-chain-client@0.9.0
+  - @parity/product-sdk-signer@0.11.0
+  - @parity/product-sdk-local-storage@0.3.1
+  - @parity/product-sdk-contracts@0.9.1
+  - @parity/product-sdk-keys@0.3.15
+  - @parity/product-sdk-tx@0.3.1
+
 ## 0.18.0
 
 ### Minor Changes
