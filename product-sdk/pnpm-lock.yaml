@@ -345,6 +345,34 @@ importers:
         specifier: ^3.0.0
         version: 3.2.6(@types/node@25.9.1)
 
+  packages/auth:
+    dependencies:
+      '@parity/product-sdk-address':
+        specifier: workspace:*
+        version: link:../address
+      '@parity/product-sdk-keys':
+        specifier: workspace:*
+        version: link:../keys
+      '@parity/product-sdk-terminal':
+        specifier: workspace:*
+        version: link:../terminal
+      '@parity/product-sdk-tx':
+        specifier: workspace:*
+        version: link:../tx
+      polkadot-api:
+        specifier: 'catalog:'
+        version: 2.1.6(esbuild@0.28.1)(rxjs@7.8.2)
+    devDependencies:
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.6(@types/node@25.9.1)
+
   packages/chain-client:
     dependencies:
       '@parity/product-sdk-descriptors':
@@ -751,6 +779,9 @@ importers:
       '@novasamatech/storage-adapter':
         specifier: ^0.8.9
         version: 0.8.9
+      '@parity/product-sdk-keys':
+        specifier: workspace:*
+        version: link:../keys
       '@parity/product-sdk-logger':
         specifier: workspace:*
         version: link:../logger
