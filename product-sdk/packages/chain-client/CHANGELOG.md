@@ -1,5 +1,26 @@
 # @parity/product-sdk-chain-client
 
+## 0.9.0
+
+### Minor Changes
+
+- c3fccfa: **Breaking: remove the Summit Network (Web3 Summit) environment.**
+
+  The Summit event is over and its chains are being decommissioned. Removes
+  the `summit-asset-hub`, `summit-bulletin`, and `summit-individuality`
+  descriptors, `"summit"` from `Environment` / `CloudStorageEnvironment`
+  (`getChainAPI("summit")` and `CloudStorageClient.create({ environment:
+"summit" })` no longer compile), the `CloudStorageNetworks.summit` preset,
+  and `BULLETIN_RPCS.summit`. `paseo` and `devnet` are unaffected.
+
+### Patch Changes
+
+- Updated dependencies [c3fccfa]
+- Updated dependencies [c3fccfa]
+- Updated dependencies [c3fccfa]
+  - @parity/product-sdk-descriptors@0.8.0
+  - @parity/product-sdk-host@0.14.0
+
 ## 0.8.0
 
 ### Minor Changes
