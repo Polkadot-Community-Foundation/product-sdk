@@ -1,5 +1,79 @@
 # @parity/product-sdk-statement-store
 
+## 0.6.0
+
+### Minor Changes
+
+- cb0098f: Introduce an SDK-wide `Result` error model: fallible operations across the
+  `@parity/product-sdk-*` packages now return a typed `Result<T, E>` instead of
+  throwing, so consumers branch on `r.ok` and get typed errors on the `err`
+  channel. See the `guides/migrating-to-result` migration guide.
+
+  **New package — `@parity/result`:** a generic, domain-agnostic, zero-dependency
+  leaf exporting `Result<T, E>` (`{ ok: true; value } | { ok: false; error }`),
+  `ok()` / `err()`, `normalizeError(cause, ErrorClass)` (coerce a caught value to a
+  typed error — the single error-normalization strategy, replacing ad-hoc `as`
+  casts), `isErrorOf(e, ErrorClass)` (generic `instanceof` guard), and
+  `unwrapOk` / `unwrapErr` (framework-agnostic test/script assertions). It carries
+  no product-sdk specifics, so it can be embedded anywhere.
+
+  **New package — `@parity/product-sdk-errors`:** a zero-dependency leaf holding
+  the product-sdk-specific cross-package `SdkError` marker interface +
+  `isSdkError(e)` guard. Every package's base error implements the marker (with a
+  `source` string like `"tx"`), so `isSdkError(e)` recognizes any SDK-origin error
+  without importing per-package classes. `@parity/product-sdk` re-exports `Result` /
+  `ok` / `err` / `isErrorOf` from `@parity/result` and `SdkError` / `isSdkError`
+  from `@parity/product-sdk-errors`.
+
+  **Breaking — these now return `Result` instead of throwing:**
+
+  - `@parity/product-sdk-tx`: `submitAndWatch`, `batchSubmitAndWatch` → `Result<TxResult, TxError>`; `ensureAccountMapped` → `Result<TxResult | null, TxError>` (`ok(null)` = already mapped); `extractTransaction` → `Result<SubmittableTransaction, TxDryRunError>` (sync). `TxAccountMappingError` now extends `TxError`.
+  - `@parity/product-sdk-contracts`: `contract.<method>.tx` → `Result<TxResult, ContractError | TxError>`; `.prepare` → `Result<BatchableCall, ContractError>`; `withLiveContractAddresses` and `ContractManager.fromLive` / `fromLiveClient` → `Result<…, ContractError>`; `ensureContractAccountMapped` → `Result<TxResult | null, TxError>`. **`contract.<method>.query` is unchanged** — it keeps returning `QueryResult<T>`, since a dry-run revert is an expected outcome (a value), not an error.
+  - `@parity/product-sdk-cloud-storage`: `queryBytes`, `queryJson`, `executeQuery`, `checkAuthorization`, `verifyStored` (`ok(null)` = not recorded at that block), `authorizeAccount`, and the equivalent `CloudStorageClient` read methods (`fetchBytes` / `fetchJson` / `checkAuthorization` / `verifyStored`). The `CloudStorageClient` methods that forward to the upstream client (`store`, `authorizePreimage`, `renew`, `estimateAuthorization`, and the `authorizeAccount` _method_) are unchanged.
+  - `@parity/product-sdk-statement-store`: `StatementStoreClient.publish` and `ChannelStore.write` → `Result<void, StatementStoreError>` (were `Promise<boolean>`). The old boolean swallowed the failure reason into `false`; the `Result` now carries it (`StatementConnectionError`, `StatementDataTooLargeError`, `StatementSubmitError`). **Note:** a bare `if (result)` now always passes (a `Result` object is truthy) — audit call sites for `.ok`.
+  - `@parity/product-sdk` umbrella: `createApp().cloudStorage.upload` / `fetch` now return `Result` (`computeCid` unchanged — pure).
+
+  `@parity/product-sdk-host` and `@parity/product-sdk-signer` (whose public
+  operations already returned `Result`) migrate onto the shared `@parity/result`
+  package and adopt the `SdkError` marker from `@parity/product-sdk-errors`; no
+  further API change.
+
+  **Unchanged everywhere:** pure/sync helpers and factories, build-time codegen,
+  lifecycle methods, and subscription APIs continue to throw or return their
+  existing types — `Result` is reserved for fallible runtime operations.
+
+- cb0098f: **Ship dev-only test fakes under a new `/testing` subpath on each package.**
+
+  Each package now exports a working in-memory fake of its interface from a
+  dedicated `/testing` entry, so SDK-dependent app code can be unit-tested with no
+  host container, chain, or wallet:
+
+  - `@parity/product-sdk-local-storage/testing` — `createFakeHostLocalStorage`
+  - `@parity/product-sdk-signer/testing` — `createFakeSignerProvider`, `fakeSignerAccount`
+  - `@parity/product-sdk-statement-store/testing` — `createFakeStatementTransport`
+  - `@parity/product-sdk-contracts/testing` — `createFakeContractRuntime`, `fakeDryRunResult`
+  - `@parity/product-sdk-host/testing` — `createFakeTruApiClient`, `createFakeHost`, `setTruApiClient`
+  - `@parity/product-sdk/testing` — `createFakeApp`, plus re-exports of the
+    local-storage, signer, contracts, and host fakes
+
+  The fakes are framework-agnostic, live behind separate build entries, and are
+  absent from every package's main entry, so production bundles are unaffected.
+  `@parity/product-sdk-host` additionally gains a module-level test seam
+  (`setTruApiClient`, exposed only through `/testing`) that the host accessors
+  consult before the sandbox client; it defaults to `null`, so production
+  behavior is unchanged.
+
+  See the new "Testing your app" guide in the docs for usage.
+
+### Patch Changes
+
+- Updated dependencies [cb0098f]
+- Updated dependencies [cb0098f]
+- Updated dependencies [cb0098f]
+  - @parity/product-sdk-host@0.13.0
+  - @parity/result@0.2.0
+  - @parity/product-sdk-errors@0.2.0
+
 ## 0.5.0
 
 ### Minor Changes

@@ -165,7 +165,7 @@ const existentialDeposit = client.assetHub.constants.Balances.ExistentialDeposit
 ### Environment
 
 ```typescript
-type Environment = "polkadot" | "kusama" | "paseo";
+type Environment = "polkadot" | "kusama" | "paseo" | "devnet";
 ```
 
 ### ChainMap

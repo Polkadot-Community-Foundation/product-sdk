@@ -1,6 +1,6 @@
 {
     "name": "@parity/product-sdk-errors",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "The SdkError marker shared across the @parity/product-sdk family",
     "type": "module",
     "sideEffects": false,

@@ -167,16 +167,16 @@ Container-only -- same semantics as `queryBytes`.
 ### `CloudStorageEnvironment`
 
 ```ts
-type CloudStorageEnvironment = "paseo" | "summit"   // keyof typeof CloudStorageNetworks
+type CloudStorageEnvironment = "paseo" | "devnet"   // keyof typeof CloudStorageNetworks
 ```
 
-The `environment` shorthand accepted by `create(...)`. Both `"paseo"` and `"summit"` are currently available.
+The `environment` shorthand accepted by `create(...)`. `"paseo"` (Paseo Next v2) and `"devnet"` (public Paseo testnet) are both currently available.
 
 ### `Environment`
 
 ```ts
 // re-exported from @parity/product-sdk-chain-client
-type Environment = "polkadot" | "kusama" | "paseo" | "summit"
+type Environment = "polkadot" | "kusama" | "paseo" | "devnet"
 ```
 
 Broader chain-client union; `getChainAPI("polkadot" | "kusama")` currently throws "not yet available".
