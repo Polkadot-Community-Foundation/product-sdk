@@ -1,5 +1,14 @@
 # @parity/product-sdk-signer
 
+## 0.11.1
+
+### Patch Changes
+
+- 8ab88ba: Preserve local host and port product identifiers when deriving the default host account.
+- Updated dependencies [8ab88ba]
+  - @parity/product-sdk-host@0.14.1
+  - @parity/product-sdk-keys@0.3.16
+
 ## 0.11.0
 
 ### Minor Changes

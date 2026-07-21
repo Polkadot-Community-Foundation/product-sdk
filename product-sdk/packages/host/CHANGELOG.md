@@ -1,5 +1,11 @@
 # @parity/product-sdk-host
 
+## 0.14.1
+
+### Patch Changes
+
+- 8ab88ba: Use the TrUAPI transport subscription ID for PAPI ChainHead follow-up requests.
+
 ## 0.14.0
 
 ### Minor Changes
