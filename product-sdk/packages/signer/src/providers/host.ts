@@ -344,8 +344,11 @@ export class HostProvider implements SignerProvider {
                 .match(
                     (account) => account,
                     (error) => {
+                        // Preserve the raw tagged error as `cause` so the catch
+                        // can classify it (e.g. NotConnected → signed-out).
                         throw new Error(
                             `Host rejected product account request: ${formatError(error)}`,
+                            { cause: error },
                         );
                     },
                 )) as RawAccount;
@@ -371,12 +374,22 @@ export class HostProvider implements SignerProvider {
                 },
             });
         } catch (cause) {
-            log.error("failed to get product account", { cause });
-            return err(
-                new HostRejectedError(
-                    cause instanceof Error ? cause.message : "Failed to get product account",
-                ),
-            );
+            const message =
+                cause instanceof Error ? cause.message : "Failed to get product account";
+            // A signed-out (NotConnected) failure is an expected state, not a
+            // fault: log it at debug with a readable message rather than dumping
+            // a raw Error at error level (whose props are non-enumerable and
+            // serialize to `{}`). Genuine faults still log at error.
+            const raw = cause instanceof Error ? cause.cause : cause;
+            const nonTransient = isNonTransientHostError(raw);
+            if (nonTransient) {
+                log.debug("product account unavailable (expected, non-transient)", {
+                    error: message,
+                });
+            } else {
+                log.error("failed to get product account", { error: message });
+            }
+            return err(new HostRejectedError(message, nonTransient));
         }
     }
 
@@ -425,12 +438,10 @@ export class HostProvider implements SignerProvider {
 
             return ok(alias);
         } catch (cause) {
-            log.error("failed to get product account alias", { cause });
-            return err(
-                new HostRejectedError(
-                    cause instanceof Error ? cause.message : "Failed to get product account alias",
-                ),
-            );
+            const message =
+                cause instanceof Error ? cause.message : "Failed to get product account alias";
+            log.error("failed to get product account alias", { error: message });
+            return err(new HostRejectedError(message));
         }
     }
 
@@ -462,12 +473,9 @@ export class HostProvider implements SignerProvider {
 
             return ok(result);
         } catch (cause) {
-            log.error("failed to get user id", { cause });
-            return err(
-                new HostRejectedError(
-                    cause instanceof Error ? cause.message : "Failed to get user id",
-                ),
-            );
+            const message = cause instanceof Error ? cause.message : "Failed to get user id";
+            log.error("failed to get user id", { error: message });
+            return err(new HostRejectedError(message));
         }
     }
 
@@ -503,12 +511,10 @@ export class HostProvider implements SignerProvider {
 
             return ok(proof);
         } catch (cause) {
-            log.error("failed to create Ring VRF proof", { cause });
-            return err(
-                new HostRejectedError(
-                    cause instanceof Error ? cause.message : "Failed to create Ring VRF proof",
-                ),
-            );
+            const message =
+                cause instanceof Error ? cause.message : "Failed to create Ring VRF proof";
+            log.error("failed to create Ring VRF proof", { error: message });
+            return err(new HostRejectedError(message));
         }
     }
 
@@ -521,11 +527,12 @@ export class HostProvider implements SignerProvider {
         try {
             provider = await this.loadAccountsProvider();
         } catch (cause) {
-            log.warn("host accounts provider unavailable", { cause });
+            const detail = cause instanceof Error ? cause.message : String(cause);
+            log.warn("host accounts provider unavailable", { error: detail });
             return err(
                 new HostUnavailableError(
                     cause instanceof Error
-                        ? `host accounts provider failed: ${cause.message}`
+                        ? `host accounts provider failed: ${detail}`
                         : "host accounts provider is unavailable",
                 ),
             );
@@ -580,8 +587,25 @@ export class HostProvider implements SignerProvider {
                 this.productAccount.derivationIndex ?? 0,
                 this.productAccount.requestName ?? true,
             );
-            if (!accountResult.ok) return accountResult;
-            signerAccounts = [accountResult.value];
+            if (!accountResult.ok) {
+                // Signed-out / non-transient: soft-degrade to read-only, matching
+                // the `dappName` branch. Returning `ok([])` (not the error) also
+                // means `connect()`'s retry loop doesn't burn attempts on a state
+                // no retry can fix. Genuine transient faults still surface as an
+                // error and get retried.
+                const error = accountResult.error;
+                if (error instanceof HostRejectedError && error.nonTransient) {
+                    log.warn(
+                        "product account unavailable (signed out or unregistered); resolving with empty accounts",
+                        { dotNsIdentifier: this.productAccount.dotNsIdentifier },
+                    );
+                    signerAccounts = [];
+                } else {
+                    return accountResult;
+                }
+            } else {
+                signerAccounts = [accountResult.value];
+            }
         } else if (this.dappName) {
             // Local hosts are already complete product identifiers (including
             // their port). DotNS product names get the canonical `.dot` suffix.
@@ -641,7 +665,9 @@ export class HostProvider implements SignerProvider {
                 });
                 log.debug("ChainSubmit permission result", { granted });
             } catch (cause) {
-                log.warn("failed to request ChainSubmit permission", { cause });
+                log.warn("failed to request ChainSubmit permission", {
+                    error: cause instanceof Error ? cause.message : String(cause),
+                });
             }
         }
 
@@ -690,7 +716,9 @@ export class HostProvider implements SignerProvider {
                     },
                 );
             } catch (cause) {
-                log.debug("getUserId threw; product account name stays null", { cause });
+                log.debug("getUserId threw; product account name stays null", {
+                    error: cause instanceof Error ? cause.message : String(cause),
+                });
                 return null;
             }
         };
@@ -702,6 +730,39 @@ export class HostProvider implements SignerProvider {
         const account = accountResult.value;
         return ok({ ...account, name: account.name ?? primaryUsername });
     }
+}
+
+/**
+ * Tags that represent an expected signed-out / not-yet-connected state rather
+ * than a fault. When a product-account fetch fails with one of these, the SDK
+ * degrades to read-only (empty accounts) instead of erroring and retrying —
+ * it's the user not being signed in, which no amount of retrying will fix.
+ */
+const NON_TRANSIENT_HOST_TAGS: ReadonlySet<string> = new Set([
+    // User is signed out.
+    "NotConnected",
+    // The product's dotNS identifier isn't registered/valid for this user —
+    // the same condition the `dappName` branch already soft-degrades for.
+    // Retrying can't fix either; both resolve to read-only.
+    "DomainNotValid",
+]);
+
+/**
+ * Does a host error represent a non-transient, expected condition (e.g. the
+ * user is signed out)? Walks the tagged-enum chain the same way
+ * {@link formatError} does — the identifying tag can sit at the outer level or
+ * nested inside a `{ tag: "v1"|"Domain", value: … }` versioned envelope — so a
+ * match anywhere in the chain counts.
+ */
+function isNonTransientHostError(error: unknown): boolean {
+    let node: unknown = error;
+    // Bounded walk: envelopes are shallow (Domain → V1 → domain error).
+    for (let depth = 0; node && typeof node === "object" && depth < 8; depth++) {
+        const tag = (node as { tag?: unknown }).tag;
+        if (typeof tag === "string" && NON_TRANSIENT_HOST_TAGS.has(tag)) return true;
+        node = (node as { value?: unknown }).value;
+    }
+    return false;
 }
 
 /**
@@ -937,6 +998,72 @@ if (import.meta.vitest) {
             }
             // `.dot` appended automatically.
             expect(mockProvider.getProductAccount).toHaveBeenCalledWith("my-cli.dot", 0);
+        });
+
+        test("connect with productAccount soft-degrades to [] when signed out (NotConnected)", async () => {
+            // The real signed-out error truapi 0.4 puts on the err channel is the
+            // full CallErrorValue envelope: Domain → V1 → NotConnected. Verified
+            // against truapi's own `client.test.ts` (getAccount error fixture:
+            // `{ tag: "Domain", value: { tag: "V1", value: { tag: "NotConnected" } } }`).
+            const mockProvider = createMockProvider({
+                shouldReject: true,
+                error: {
+                    tag: "Domain",
+                    value: { tag: "V1", value: { tag: "NotConnected", value: undefined } },
+                },
+            });
+            const provider = new HostProvider({
+                maxRetries: 3,
+                productAccount: { dotNsIdentifier: "my-cli.dot" },
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
+            });
+            const result = await provider.connect();
+
+            // Resolves read-only rather than erroring.
+            expect(result.ok).toBe(true);
+            if (result.ok) expect(result.value).toEqual([]);
+            // And does NOT retry a signed-out state — one attempt only.
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(1);
+        });
+
+        test("connect with productAccount soft-degrades on a bare NotConnected tag too", async () => {
+            // Defensive: some host builds / versions may surface the tag unwrapped.
+            const mockProvider = createMockProvider({
+                shouldReject: true,
+                error: { tag: "NotConnected" },
+            });
+            const provider = new HostProvider({
+                maxRetries: 3,
+                productAccount: { dotNsIdentifier: "my-cli.dot" },
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
+            });
+            const result = await provider.connect();
+
+            expect(result.ok).toBe(true);
+            if (result.ok) expect(result.value).toEqual([]);
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(1);
+        });
+
+        test("connect with productAccount surfaces + retries a transient failure", async () => {
+            const mockProvider = createMockProvider({
+                shouldReject: true,
+                error: { tag: "SomethingTransient", value: { reason: "flaky" } },
+            });
+            const provider = new HostProvider({
+                maxRetries: 3,
+                retryDelay: 0,
+                productAccount: { dotNsIdentifier: "my-cli.dot" },
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
+            });
+            const result = await provider.connect();
+
+            // Transient failure is NOT swallowed — it errors...
+            expect(result.ok).toBe(false);
+            // ...and was retried the full maxRetries times.
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(3);
         });
 
         test("connect with dappName already ending in .dot doesn't double-append", async () => {
@@ -1382,6 +1509,45 @@ if (import.meta.vitest) {
 
         test("formats a primitive inner value alongside the tag", () => {
             expect(formatError({ tag: "v1", value: "code-42" })).toBe("v1 (code-42)");
+        });
+    });
+
+    describe("isNonTransientHostError", () => {
+        test("matches NotConnected at the outer tag", () => {
+            expect(isNonTransientHostError({ tag: "NotConnected" })).toBe(true);
+        });
+
+        test("matches DomainNotValid (unregistered dotNS identifier)", () => {
+            expect(isNonTransientHostError({ tag: "DomainNotValid" })).toBe(true);
+            expect(
+                isNonTransientHostError({
+                    tag: "Domain",
+                    value: { tag: "V1", value: { tag: "DomainNotValid" } },
+                }),
+            ).toBe(true);
+        });
+
+        test("matches NotConnected nested inside a versioned envelope", () => {
+            expect(isNonTransientHostError({ tag: "v1", value: { tag: "NotConnected" } })).toBe(
+                true,
+            );
+            expect(
+                isNonTransientHostError({
+                    tag: "Domain",
+                    value: { tag: "V1", value: { tag: "NotConnected" } },
+                }),
+            ).toBe(true);
+        });
+
+        test("does not match transient / other errors", () => {
+            expect(isNonTransientHostError({ tag: "PermissionDenied" })).toBe(false);
+            // Deliberate: `Rejected` (user declined the prompt) is NOT non-transient
+            // — a re-prompt can succeed, so it should still surface/retry.
+            expect(isNonTransientHostError({ tag: "Rejected" })).toBe(false);
+            expect(isNonTransientHostError({ tag: "v1", value: { reason: "flaky" } })).toBe(false);
+            expect(isNonTransientHostError({ reason: "boom" })).toBe(false);
+            expect(isNonTransientHostError("NotConnected")).toBe(false); // bare string, not tagged
+            expect(isNonTransientHostError(undefined)).toBe(false);
         });
     });
 }
