@@ -1,5 +1,172 @@
 # @parity/product-sdk
 
+## 0.20.0
+
+### Minor Changes
+
+- bffc04a: Typed `AllowanceExpiredError` for signs that fail on a lapsed allowance.
+
+  New `AllowanceExpiredError` in `@parity/product-sdk-signer` (extends
+  `SignerError`, so it carries the shared `SdkError` marker; `.resource` names
+  the lapsed allowance, `.cause` holds the underlying failure). The terminal
+  session signers (`signTx` via `session.createTransaction`, `signBytes` via
+  `session.signRaw`) now reject with it when the failure is the statement-store
+  `NoAllowanceError` (matched directly or anywhere on the `cause` chain) instead
+  of a generic `Error` — so consumers can `catch (e) { if (e instanceof
+AllowanceExpiredError) … }` and prompt a re-pair, rather than string-matching
+  console output.
+
+  Deliberately **thrown**, not returned as a `Result` `err`: it surfaces at
+  PAPI's `PolkadotSigner.signTx`/`signBytes` boundary, whose contract is a
+  rejecting Promise — an intentional exception to the SDK-wide Result
+  convention. Re-exported from `@parity/product-sdk-terminal` (which gains a
+  `@parity/product-sdk-signer` workspace dependency).
+
+  Note: the root-cause fix for the 240 s hang before this error is even
+  reachable lives upstream in `@novasamatech/host-papp`
+  (`awaitReplyOrAckFailure` drops rejected ACKs) and is tracked separately.
+
+- bffc04a: Bulletin allowance status read-back: `getBulletinAllowanceStatus`.
+
+  New `getBulletinAllowanceStatus(api, slotAddress)` returns
+  `Result<BulletinAllowanceStatus, CloudStorageAuthorizationError>`, composing
+  the existing `checkAuthorization` quota read with a `System.Number`
+  current-block read. `BulletinAllowanceStatus extends AuthorizationStatus` with
+  the two derived fields every consumer re-computes by hand:
+  `remainingBlocks` (`max(0, expiration - currentBlock)`) and `usable`.
+
+  `usable` folds in every hard gate the chain enforces: the authorization must
+  exist, be unexpired (`currentBlock < expiration`), **and** have quota left
+  (`remainingTransactions > 0` and `remainingBytes > 0`). Expiry is not the only
+  gate — the chain also rejects a store once the transaction or byte quota is
+  exhausted. `usable === true` still does not guarantee a given store will fit:
+  callers must size-check `remainingBytes` against their actual payload.
+
+  Errors from either on-chain read propagate on the `err` channel.
+
+- bffc04a: Export the pallet-revive account-mapping read probe.
+
+  New `isContractAccountMapped(runtime, address)` returns
+  `Result<boolean, ContractError>` — the read-only half of
+  `ensureContractAccountMapped`, extracted from its inline checker. It derives
+  the H160 via `ss58ToH160` and reads `Revive.OriginalAccount`; no signer, no
+  transaction, no wallet prompt, so it's safe for "is this account ready to make
+  contract calls?" checks. `ensureContractAccountMapped` now reuses it
+  internally (a failed probe still surfaces as `TxAccountMappingError`, with the
+  `ContractError` attached on the cause chain).
+
+- bffc04a: Validate the dry-run/tx origin before it reaches PAPI's `AccountId` codec.
+
+  A non-SS58 origin — most commonly the account's H160 (`0x…`), since
+  pallet-revive derives the H160 `msg.sender` _from_ the SS58 origin — used to
+  fail deep inside the encode stack as a bare `Invalid checksum` with no hint
+  about the cause. All three call paths now validate the resolved origin with
+  `isValidSs58` and produce a new `ContractInvalidOriginError extends
+ContractError` (message includes the rejected value, plus a "looks like an
+  H160 — convert it with `h160ToSs58`" hint when applicable):
+
+  - `.tx()` and `.prepare()` return it as `err(ContractInvalidOriginError)`;
+  - `.query()` **throws** it (`QueryResult` has no error channel — the one
+    deliberate asymmetry).
+
+  Validation only — no auto-conversion, so the SDK never silently changes which
+  account the caller believes is calling.
+
+- bffc04a: **Degrade gracefully when resolving a product account while signed out (#253).**
+
+  When `HostProvider` is configured with `productAccount` and `connect()` runs
+  without an active user session, the signed-out (`NotConnected`) state was
+  treated as a fault: logged at `error` level with an opaque `{ cause }` payload
+  (which serialized to `{}`), and retried up to 3× by `connect()`. It now
+  soft-degrades to an empty accounts list (read-only), mirroring the `dappName`
+  branch — signed-out and unregistered-identifier (`DomainNotValid`) failures log
+  at `debug`/`warn` and skip retries, while genuine transient faults still error
+  and retry.
+
+  All host-RPC error logs in `host.ts` now serialize a readable message
+  (`{ error: <message> }`) instead of the opaque `{ cause }`, so structured log
+  sinks show the actual reason. `HostRejectedError` gains a `nonTransient` flag
+  carrying the classification.
+
+- bffc04a: Allow the `-terminal/host` allocation APIs to target an explicit `productId`.
+
+  `requestResourceAllocation` (via `options.productId`), `getCachedAllocation`,
+  `ensureSlotAccountSigner`, and `createSlotAccountSigner` (via a trailing
+  optional `productId` parameter) can now override `adapter.appId` for both the
+  wire `callingProductId` and the slot-cache namespace. Defaults to
+  `adapter.appId` — no behavior change for existing callers.
+
+  Fixes the PGAS mis-mapping footgun where an app whose product id differs from
+  the terminal's storage `appId` gets its sponsored-gas allowance minted and
+  auto-mapped on the wrong on-chain account, and brings the allocation side in
+  line with the signer/read side (`createSessionSignerForAccount`,
+  `getBulletinSigner`), which already takes an explicit `productId`. Consumers
+  can delete their `{ ...adapter, appId: productId }` spread workarounds.
+
+  > **Warning:** thread the **same** `productId` through **all four** allocation
+  > APIs — `requestResourceAllocation`, `getCachedAllocation`,
+  > `ensureSlotAccountSigner`, and `createSlotAccountSigner`. Deleting the
+  > `{ ...adapter, appId }` spread without passing `productId` everywhere silently
+  > reintroduces the wrong-account PGAS mint (allowance minted / auto-mapped on
+  > the account derived from `adapter.appId` instead of your product's account),
+  > which is exactly the footgun this change closes.
+
+- bffc04a: Update `@parity/truapi` to 0.6.0. Product-account derivation indexes are now
+  tagged `DerivationIndex` selectors on the wire (`{ tag: "Left", value: number }`
+  for a plain index, `{ tag: "Right", value: <32-byte hex> }` for a raw index).
+  The ergonomic account surfaces keep plain numbers — `getProductAccount(id,
+index)` and `ProductAccount.derivationIndex` are unchanged, with the host
+  adapter wrapping them as `Left` — but the pass-through shapes track the
+  protocol: `ProductProofContext.suffix` (ring VRF contexts, exported from both
+  host and signer) is now the tagged selector instead of a hex string, and
+  `PaymentTopUpSource`'s `ProductAccount` source and `AllocatableResource`'s
+  `SmartContractAllowance` value carry it too. The
+  `DerivationIndex` type is exported from host and signer. The release also
+  brings the host's new sr25519 `account.signVrf` API (not yet wrapped by an SDK
+  accessor).
+- bffc04a: Stop collapsing pre-inclusion transaction failures to opaque errors.
+
+  New `TxValidityError` (extends `TxError`; raw failure payload on `.reason`,
+  human-readable `.formatted`): `submitAndWatch` now puts it on the `err`
+  channel for _pre-inclusion_ validity/submission failures: polkadot-api
+  rejects the subscription with an `InvalidTxError` whose `.error` carries the
+  decoded `TransactionValidityError` — e.g. `InvalidTransaction::Payment` when
+  the submitter can't pay or isn't authorized. The payload is preserved on
+  `.reason` and formatted via the new `formatValidityError` helper
+  (`{ type: "Invalid", value: { type: "Payment" } }` → `"Invalid.Payment"`).
+  Previously this surfaced as a base `TxError` whose message was raw JSON.
+
+  An _included_ failure event that carries no `dispatchError` — an anomaly,
+  since `dispatchError` normally exists once a tx is included — is classified
+  as a `TxDispatchError` with a neutral message, no longer the placeholder
+  `"unknown error"`. It is deliberately **not** a `TxValidityError`: that type
+  is reserved for genuine pre-inclusion failures, and this case is
+  post-inclusion.
+
+  `formatValidityError(reason)` is exported alongside the other formatters.
+
+  `withRetry` treats `TxValidityError` as non-retryable, matching how these
+  failures behaved when they surfaced as `TxDispatchError`.
+
+### Patch Changes
+
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+  - @parity/product-sdk-signer@0.12.0
+  - @parity/product-sdk-cloud-storage@0.9.0
+  - @parity/product-sdk-contracts@0.10.0
+  - @parity/product-sdk-host@0.15.0
+  - @parity/product-sdk-tx@0.4.0
+  - @parity/product-sdk-chain-client@0.9.2
+  - @parity/product-sdk-local-storage@0.3.3
+  - @parity/product-sdk-keys@0.3.17
+
 ## 0.19.1
 
 ### Patch Changes
