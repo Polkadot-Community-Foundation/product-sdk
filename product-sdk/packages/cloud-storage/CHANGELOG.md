@@ -1,5 +1,14 @@
 # @parity/product-sdk-bulletin
 
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [70c30f3]
+  - @parity/product-sdk-host@0.15.1
+  - @parity/product-sdk-chain-client@0.9.3
+  - @parity/product-sdk-tx@0.4.1
+
 ## 0.9.0
 
 ### Minor Changes
