@@ -73,10 +73,13 @@ export type {
     DerivationIndex,
     HostAccount,
     ProductAccount,
+    ProductAccountLookup,
     ContextualAlias,
     ProductProofContext,
     RingLocation,
     RingVRFProof,
+    VrfSignature,
+    VrfTranscriptItem,
 } from "./accounts.js";
 
 // Higher-level permission wrappers
