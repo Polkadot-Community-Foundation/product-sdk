@@ -1,5 +1,75 @@
 # @parity/product-sdk-terminal
 
+## 0.7.1
+
+### Patch Changes
+
+- @parity/product-sdk-signer@0.12.1
+- @parity/product-sdk-keys@0.3.18
+
+## 0.7.0
+
+### Minor Changes
+
+- bffc04a: Typed `AllowanceExpiredError` for signs that fail on a lapsed allowance.
+
+  New `AllowanceExpiredError` in `@parity/product-sdk-signer` (extends
+  `SignerError`, so it carries the shared `SdkError` marker; `.resource` names
+  the lapsed allowance, `.cause` holds the underlying failure). The terminal
+  session signers (`signTx` via `session.createTransaction`, `signBytes` via
+  `session.signRaw`) now reject with it when the failure is the statement-store
+  `NoAllowanceError` (matched directly or anywhere on the `cause` chain) instead
+  of a generic `Error` — so consumers can `catch (e) { if (e instanceof
+AllowanceExpiredError) … }` and prompt a re-pair, rather than string-matching
+  console output.
+
+  Deliberately **thrown**, not returned as a `Result` `err`: it surfaces at
+  PAPI's `PolkadotSigner.signTx`/`signBytes` boundary, whose contract is a
+  rejecting Promise — an intentional exception to the SDK-wide Result
+  convention. Re-exported from `@parity/product-sdk-terminal` (which gains a
+  `@parity/product-sdk-signer` workspace dependency).
+
+  Note: the root-cause fix for the 240 s hang before this error is even
+  reachable lives upstream in `@novasamatech/host-papp`
+  (`awaitReplyOrAckFailure` drops rejected ACKs) and is tracked separately.
+
+- bffc04a: Allow the `-terminal/host` allocation APIs to target an explicit `productId`.
+
+  `requestResourceAllocation` (via `options.productId`), `getCachedAllocation`,
+  `ensureSlotAccountSigner`, and `createSlotAccountSigner` (via a trailing
+  optional `productId` parameter) can now override `adapter.appId` for both the
+  wire `callingProductId` and the slot-cache namespace. Defaults to
+  `adapter.appId` — no behavior change for existing callers.
+
+  Fixes the PGAS mis-mapping footgun where an app whose product id differs from
+  the terminal's storage `appId` gets its sponsored-gas allowance minted and
+  auto-mapped on the wrong on-chain account, and brings the allocation side in
+  line with the signer/read side (`createSessionSignerForAccount`,
+  `getBulletinSigner`), which already takes an explicit `productId`. Consumers
+  can delete their `{ ...adapter, appId: productId }` spread workarounds.
+
+  > **Warning:** thread the **same** `productId` through **all four** allocation
+  > APIs — `requestResourceAllocation`, `getCachedAllocation`,
+  > `ensureSlotAccountSigner`, and `createSlotAccountSigner`. Deleting the
+  > `{ ...adapter, appId }` spread without passing `productId` everywhere silently
+  > reintroduces the wrong-account PGAS mint (allowance minted / auto-mapped on
+  > the account derived from `adapter.appId` instead of your product's account),
+  > which is exactly the footgun this change closes.
+
+### Patch Changes
+
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+  - @parity/product-sdk-signer@0.12.0
+  - @parity/product-sdk-keys@0.3.17
+
+## 0.6.2
+
+### Patch Changes
+
+- @parity/product-sdk-keys@0.3.16
+
 ## 0.6.1
 
 ### Patch Changes

@@ -1,5 +1,75 @@
 # @parity/product-sdk-bulletin
 
+## 0.10.0
+
+### Minor Changes
+
+- 5ccab21: **Regenerate `paseo-bulletin` descriptors for the upcoming `v0.0.22-paseo` runtime (spec `1_000_022`).**
+
+  Metadata was extracted offline from the `polkadot-bulletin-chain` `v0.0.22-paseo` release wasm (`papi add --wasm`) ahead of its deployment to Paseo Next v2, which currently runs spec `1_000_021`. Merge/publish this once the runtime upgrade is enacted on-chain.
+
+  Runtime changes surfaced in the descriptors:
+
+  - New `DataRenewal` pallet (`pallet_bulletin_data_renewal`, pallet index 42) — new tx/query/event API surface, hence the minor bump.
+  - `renew`, `force_renew`, `enable_auto_renew` and `disable_auto_renew` **move off `TransactionStorage`** onto the new pallet. `CloudStorageClient.renew()` builds the old call via `@parity/bulletin-sdk`, so it will throw until that package is repointed at `DataRenewal.renew`.
+
+  The pinned `codeHash` is pre-set to the release blob's blake2-256 (`0xabb9c076…`, matching what on-chain `:code` will hash to after the upgrade); `genesis` is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [5ccab21]
+  - @parity/product-sdk-descriptors@0.9.0
+  - @parity/product-sdk-chain-client@0.10.0
+
+## 0.9.1
+
+### Patch Changes
+
+- Updated dependencies [70c30f3]
+  - @parity/product-sdk-host@0.15.1
+  - @parity/product-sdk-chain-client@0.9.3
+  - @parity/product-sdk-tx@0.4.1
+
+## 0.9.0
+
+### Minor Changes
+
+- bffc04a: Bulletin allowance status read-back: `getBulletinAllowanceStatus`.
+
+  New `getBulletinAllowanceStatus(api, slotAddress)` returns
+  `Result<BulletinAllowanceStatus, CloudStorageAuthorizationError>`, composing
+  the existing `checkAuthorization` quota read with a `System.Number`
+  current-block read. `BulletinAllowanceStatus extends AuthorizationStatus` with
+  the two derived fields every consumer re-computes by hand:
+  `remainingBlocks` (`max(0, expiration - currentBlock)`) and `usable`.
+
+  `usable` folds in every hard gate the chain enforces: the authorization must
+  exist, be unexpired (`currentBlock < expiration`), **and** have quota left
+  (`remainingTransactions > 0` and `remainingBytes > 0`). Expiry is not the only
+  gate — the chain also rejects a store once the transaction or byte quota is
+  exhausted. `usable === true` still does not guarantee a given store will fit:
+  callers must size-check `remainingBytes` against their actual payload.
+
+  Errors from either on-chain read propagate on the `err` channel.
+
+### Patch Changes
+
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+  - @parity/product-sdk-host@0.15.0
+  - @parity/product-sdk-tx@0.4.0
+  - @parity/product-sdk-chain-client@0.9.2
+
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [8ab88ba]
+  - @parity/product-sdk-host@0.14.1
+  - @parity/product-sdk-chain-client@0.9.1
+  - @parity/product-sdk-tx@0.3.2
+
 ## 0.8.0
 
 ### Minor Changes
