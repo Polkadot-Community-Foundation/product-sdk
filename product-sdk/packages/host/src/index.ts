@@ -70,12 +70,16 @@ export type { HostErrorPayload } from "./errors.js";
 export { getAccountsProvider } from "./accounts.js";
 export type {
     AccountsProvider,
+    DerivationIndex,
     HostAccount,
     ProductAccount,
+    ProductAccountLookup,
     ContextualAlias,
     ProductProofContext,
     RingLocation,
     RingVRFProof,
+    VrfSignature,
+    VrfTranscriptItem,
 } from "./accounts.js";
 
 // Higher-level permission wrappers

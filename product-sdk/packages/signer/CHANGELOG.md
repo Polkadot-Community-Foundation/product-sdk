@@ -1,5 +1,85 @@
 # @parity/product-sdk-signer
 
+## 0.12.1
+
+### Patch Changes
+
+- Updated dependencies [70c30f3]
+  - @parity/product-sdk-host@0.15.1
+  - @parity/product-sdk-keys@0.3.18
+
+## 0.12.0
+
+### Minor Changes
+
+- bffc04a: Typed `AllowanceExpiredError` for signs that fail on a lapsed allowance.
+
+  New `AllowanceExpiredError` in `@parity/product-sdk-signer` (extends
+  `SignerError`, so it carries the shared `SdkError` marker; `.resource` names
+  the lapsed allowance, `.cause` holds the underlying failure). The terminal
+  session signers (`signTx` via `session.createTransaction`, `signBytes` via
+  `session.signRaw`) now reject with it when the failure is the statement-store
+  `NoAllowanceError` (matched directly or anywhere on the `cause` chain) instead
+  of a generic `Error` — so consumers can `catch (e) { if (e instanceof
+AllowanceExpiredError) … }` and prompt a re-pair, rather than string-matching
+  console output.
+
+  Deliberately **thrown**, not returned as a `Result` `err`: it surfaces at
+  PAPI's `PolkadotSigner.signTx`/`signBytes` boundary, whose contract is a
+  rejecting Promise — an intentional exception to the SDK-wide Result
+  convention. Re-exported from `@parity/product-sdk-terminal` (which gains a
+  `@parity/product-sdk-signer` workspace dependency).
+
+  Note: the root-cause fix for the 240 s hang before this error is even
+  reachable lives upstream in `@novasamatech/host-papp`
+  (`awaitReplyOrAckFailure` drops rejected ACKs) and is tracked separately.
+
+- bffc04a: **Degrade gracefully when resolving a product account while signed out (#253).**
+
+  When `HostProvider` is configured with `productAccount` and `connect()` runs
+  without an active user session, the signed-out (`NotConnected`) state was
+  treated as a fault: logged at `error` level with an opaque `{ cause }` payload
+  (which serialized to `{}`), and retried up to 3× by `connect()`. It now
+  soft-degrades to an empty accounts list (read-only), mirroring the `dappName`
+  branch — signed-out and unregistered-identifier (`DomainNotValid`) failures log
+  at `debug`/`warn` and skip retries, while genuine transient faults still error
+  and retry.
+
+  All host-RPC error logs in `host.ts` now serialize a readable message
+  (`{ error: <message> }`) instead of the opaque `{ cause }`, so structured log
+  sinks show the actual reason. `HostRejectedError` gains a `nonTransient` flag
+  carrying the classification.
+
+- bffc04a: Update `@parity/truapi` to 0.6.0. Product-account derivation indexes are now
+  tagged `DerivationIndex` selectors on the wire (`{ tag: "Left", value: number }`
+  for a plain index, `{ tag: "Right", value: <32-byte hex> }` for a raw index).
+  The ergonomic account surfaces keep plain numbers — `getProductAccount(id,
+index)` and `ProductAccount.derivationIndex` are unchanged, with the host
+  adapter wrapping them as `Left` — but the pass-through shapes track the
+  protocol: `ProductProofContext.suffix` (ring VRF contexts, exported from both
+  host and signer) is now the tagged selector instead of a hex string, and
+  `PaymentTopUpSource`'s `ProductAccount` source and `AllocatableResource`'s
+  `SmartContractAllowance` value carry it too. The
+  `DerivationIndex` type is exported from host and signer. The release also
+  brings the host's new sr25519 `account.signVrf` API (not yet wrapped by an SDK
+  accessor).
+
+### Patch Changes
+
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+  - @parity/product-sdk-host@0.15.0
+  - @parity/product-sdk-keys@0.3.17
+
+## 0.11.1
+
+### Patch Changes
+
+- 8ab88ba: Preserve local host and port product identifiers when deriving the default host account.
+- Updated dependencies [8ab88ba]
+  - @parity/product-sdk-host@0.14.1
+  - @parity/product-sdk-keys@0.3.16
+
 ## 0.11.0
 
 ### Minor Changes

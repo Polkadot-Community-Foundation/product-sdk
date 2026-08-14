@@ -1,5 +1,32 @@
 # @parity/product-sdk-auth
 
+## 0.2.4
+
+### Patch Changes
+
+- @parity/product-sdk-keys@0.3.18
+- @parity/product-sdk-terminal@0.7.1
+- @parity/product-sdk-tx@0.4.1
+
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+- Updated dependencies [bffc04a]
+  - @parity/product-sdk-terminal@0.7.0
+  - @parity/product-sdk-tx@0.4.0
+  - @parity/product-sdk-keys@0.3.17
+
+## 0.2.2
+
+### Patch Changes
+
+- @parity/product-sdk-keys@0.3.16
+- @parity/product-sdk-terminal@0.6.2
+- @parity/product-sdk-tx@0.3.2
+
 ## 0.2.1
 
 ### Patch Changes

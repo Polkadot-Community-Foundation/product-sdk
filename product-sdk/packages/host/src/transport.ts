@@ -19,6 +19,11 @@ import {
 
 import type { HostSubscription } from "./types.js";
 
+/** A {@link HostSubscription} carrying the transport-assigned subscription id. */
+export interface TransportSubscription extends HostSubscription {
+    readonly subscriptionId: string;
+}
+
 // Test-only override. When set — via `setTruApiClient`, exposed through
 // `@parity/product-sdk-host/testing` — every host accessor resolves this client
 // instead of the sandbox one. `null` in production, so the branches below are
@@ -91,7 +96,7 @@ export async function getClient(): Promise<TrUApiClient | null> {
 export function subscribeWithInterrupt<Item, Reason = never>(
     observable: ObservableLike<Item, Reason>,
     onNext: (item: Item) => void,
-): HostSubscription {
+): TransportSubscription {
     let interruptCallback: ((reason?: unknown) => void) | undefined;
     const sub = observable.subscribe({
         next: onNext,
@@ -99,6 +104,7 @@ export function subscribeWithInterrupt<Item, Reason = never>(
         complete: () => interruptCallback?.(),
     });
     return {
+        subscriptionId: sub.subscriptionId,
         unsubscribe: () => sub.unsubscribe(),
         onInterrupt: (callback) => {
             interruptCallback = callback;
@@ -155,5 +161,21 @@ if (import.meta.vitest) {
             console.warn = realWarn;
             process.env.NODE_ENV = original;
         }
+    });
+
+    test("subscribeWithInterrupt preserves the transport subscription id", () => {
+        const observable = {
+            subscribe: () => ({
+                subscriptionId: "p:17",
+                unsubscribe: () => {},
+            }),
+            [Symbol.observable]() {
+                return this;
+            },
+        } as ObservableLike<never>;
+
+        const subscription = subscribeWithInterrupt(observable, () => {});
+
+        expect(subscription.subscriptionId).toBe("p:17");
     });
 }

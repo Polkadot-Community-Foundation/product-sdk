@@ -1,5 +1,49 @@
 # @parity/product-sdk-host
 
+## 0.15.1
+
+### Patch Changes
+
+- 70c30f3: Update `@parity/truapi` to 0.7.0. No SDK API changes; the client is
+  byte-identical to 0.6.0 apart from its embedded `packageVersion` string. It
+  pairs with `@parity/truapi-host@0.4.0`, which requires `@parity/truapi`
+  `^0.7.0` and holds the actual work: a rebuilt WASM server plus host-side review
+  surfaces for RFC-0023 VRF transcript signing (`SignVrfReview`) and RFC-0010
+  per-subtree AutoSigning keys (`AutoSigningKey`). Bumping keeps products inside
+  the version range that hosts running truapi-host 0.4.0 resolve.
+
+## 0.15.0
+
+### Minor Changes
+
+- bffc04a: Update `@parity/truapi` to 0.6.0. Product-account derivation indexes are now
+  tagged `DerivationIndex` selectors on the wire (`{ tag: "Left", value: number }`
+  for a plain index, `{ tag: "Right", value: <32-byte hex> }` for a raw index).
+  The ergonomic account surfaces keep plain numbers — `getProductAccount(id,
+index)` and `ProductAccount.derivationIndex` are unchanged, with the host
+  adapter wrapping them as `Left` — but the pass-through shapes track the
+  protocol: `ProductProofContext.suffix` (ring VRF contexts, exported from both
+  host and signer) is now the tagged selector instead of a hex string, and
+  `PaymentTopUpSource`'s `ProductAccount` source and `AllocatableResource`'s
+  `SmartContractAllowance` value carry it too. The
+  `DerivationIndex` type is exported from host and signer. The release also
+  brings the host's new sr25519 `account.signVrf` API (not yet wrapped by an SDK
+  accessor).
+
+### Patch Changes
+
+- bffc04a: Update `@parity/truapi` to 0.5.1. No SDK API changes; the embedded sandbox
+  client gains a fallback for legacy iframe hosts that don't yet answer the
+  `truapi-ready` / `truapi-init` MessagePort handoff (it recognizes their
+  first raw frame instead), and reports a real `"connecting"` status while
+  waiting for the host channel.
+
+## 0.14.1
+
+### Patch Changes
+
+- 8ab88ba: Use the TrUAPI transport subscription ID for PAPI ChainHead follow-up requests.
+
 ## 0.14.0
 
 ### Minor Changes
