@@ -10,11 +10,14 @@ catalogs:
       specifier: ^0.12.1
       version: 0.12.1
     '@parity/truapi':
-      specifier: ^0.7.0
-      version: 0.7.0
+      specifier: ^0.13.1
+      version: 0.13.1
     '@playwright/test':
       specifier: ^1.60.0
       version: 1.60.0
+    '@polkadot-api/metadata-builders':
+      specifier: ^0.14.3
+      version: 0.14.3
     '@polkadot-api/substrate-bindings':
       specifier: ^0.20.3
       version: 0.20.3
@@ -535,7 +538,7 @@ importers:
         version: link:../result
       '@parity/truapi':
         specifier: 'catalog:'
-        version: 0.7.0
+        version: 0.13.1
       '@polkadot-api/json-rpc-provider':
         specifier: ^0.2.0
         version: 0.2.0
@@ -557,6 +560,40 @@ importers:
         version: 5.9.3
       vitest:
         specifier: ^3.0.0
+        version: 3.2.6(@types/node@25.9.1)
+
+  packages/individuality:
+    dependencies:
+      '@parity/product-sdk-errors':
+        specifier: workspace:*
+        version: link:../errors
+      '@parity/product-sdk-utils':
+        specifier: workspace:*
+        version: link:../utils
+      '@parity/result':
+        specifier: workspace:*
+        version: link:../result
+      '@polkadot-api/metadata-builders':
+        specifier: 'catalog:'
+        version: 0.14.3
+      '@polkadot-api/substrate-bindings':
+        specifier: 'catalog:'
+        version: 0.20.3
+      polkadot-api:
+        specifier: 'catalog:'
+        version: 2.1.6(esbuild@0.28.1)(rxjs@7.8.2)
+    devDependencies:
+      '@parity/product-sdk-descriptors':
+        specifier: workspace:*
+        version: link:../descriptors
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(postcss@8.5.15)(typescript@5.9.3)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
         version: 3.2.6(@types/node@25.9.1)
 
   packages/keys:
@@ -653,6 +690,9 @@ importers:
       '@parity/product-sdk-host':
         specifier: workspace:*
         version: link:../host
+      '@parity/product-sdk-individuality':
+        specifier: workspace:*
+        version: link:../individuality
       '@parity/product-sdk-keys':
         specifier: workspace:*
         version: link:../keys
@@ -1654,8 +1694,8 @@ packages:
       '@playwright/test':
         optional: true
 
-  '@parity/truapi@0.7.0':
-    resolution: {integrity: sha512-xBGZP7/l74I0WGUnHgoFNYah+20I3JgykJ5pNUVsw3mQzNoCHuZSVJW6sUq7fzLvRF4wM2glPTPxUOiFKgfE9A==}
+  '@parity/truapi@0.13.1':
+    resolution: {integrity: sha512-6gkfHskN8I7H5DwB7j96wRusVx7xuGzu1YGWLBLPCD1RtBSnkPaQq/8Ac3MwudNz8kYqKZ5kZao3EkJ4PN4nCg==}
 
   '@playwright/test@1.60.0':
     resolution: {integrity: sha512-O71yZIbAh/PxDMNGns37GHBIfrVkEVyn+AXyIa5dOTfb4/xNvRWV+Vv/NMbNCtODB/pO7vLlF2OTmMVLhmr7Ag==}
@@ -3905,7 +3945,7 @@ snapshots:
     optionalDependencies:
       '@playwright/test': 1.60.0
 
-  '@parity/truapi@0.7.0':
+  '@parity/truapi@0.13.1':
     dependencies:
       '@noble/hashes': 2.2.0
       neverthrow: 8.2.0
