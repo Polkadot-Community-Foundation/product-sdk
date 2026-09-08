@@ -184,8 +184,23 @@ jobs:
                     echo "Manually closing the issue while drift persists will cause the next scheduled run to re-open it."
                   } > drift-issue-body.md
 
+            # The report is the point of this job, and it must survive when the
+            # tracking issue cannot be written. This fork has Issues DISABLED
+            # (PCF routes reports to products-devnet-issues), so every `gh issue`
+            # call below 404s. Publishing to the run summary first means the
+            # drift signal is always readable straight off the run.
+            - name: Publish report to run summary
+              if: steps.probe.outputs.unreachable_count != steps.probe.outputs.total
+              run: cat packages/descriptors/drift-issue-body.md >> "$GITHUB_STEP_SUMMARY"
+
+            # The three `gh issue` steps below are best-effort: they are how
+            # upstream tracks drift, and are kept byte-compatible so this file
+            # stays mergeable. On a repo without Issues they fail harmlessly —
+            # `continue-on-error` stops that from turning the whole cron red and
+            # masking a genuine probe failure.
             - name: Ensure descriptors-drift label exists
               if: steps.probe.outputs.unreachable_count != steps.probe.outputs.total
+              continue-on-error: true
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
@@ -199,6 +214,7 @@ jobs:
             # notifications don't churn.
             - name: Upsert tracking issue
               if: (steps.probe.outputs.drift_count != '0' || steps.probe.outputs.unreachable_count != '0') && steps.probe.outputs.unreachable_count != steps.probe.outputs.total
+              continue-on-error: true
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
@@ -226,6 +242,7 @@ jobs:
             # All chains clean — close any open tracking issue with a comment.
             - name: Close tracking issue on clean run
               if: steps.probe.outputs.drift_count == '0' && steps.probe.outputs.unreachable_count == '0'
+              continue-on-error: true
               env:
                   GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
               run: |
