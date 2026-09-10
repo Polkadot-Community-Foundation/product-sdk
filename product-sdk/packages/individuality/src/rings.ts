@@ -327,7 +327,7 @@ if (import.meta.vitest) {
         };
     }
 
-    /** Pre-#20: a chain still publishing the `Score.Suffix` constant. Devnet only, now. */
+    /** Pre-#20: a chain still publishing the `Score.Suffix` constant. No pinned chain, now. */
     function legacyChain(
         scoreContext: string | Promise<string>,
         suffix: Uint8Array = utf8ToBytes("testnet"),

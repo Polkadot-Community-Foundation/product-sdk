@@ -12,9 +12,10 @@
  * `Game`'s base is a runtime constant; `PeopleAirdrops`' never reaches metadata, so
  * it is hardcoded and the pinned vectors are its only guard.
  *
- * **This layout is paseo's.** Devnet's base is 28 bytes — one draw per game, so no
- * airdrop-index byte. `SizedHex<N>` erases `N`, so nothing typechecks that: the
- * length check in {@link gameAirdropEventId} is the whole guard.
+ * **This layout is every pinned chain's** since devnet's Paseo v2.5.2 re-pin; before
+ * it, devnet's base was 28 bytes — one draw per game, so no airdrop-index byte.
+ * `SizedHex<N>` erases `N`, so nothing typechecks that: the length check in
+ * {@link gameAirdropEventId} is the whole guard.
  */
 import { ProductIndividualityError } from "./errors.js";
 

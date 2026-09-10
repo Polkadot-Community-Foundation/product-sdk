@@ -305,8 +305,8 @@ function generalTxExtensions(
  *
  * @returns the finished extrinsic bytes and the proof's ring coordinates.
  * @throws {AsPersonError} when the chain's metadata declares a pipeline or a
- *   `PeopleLiteAuth` field list this package cannot encode (devnet predates
- *   the revision field), when a slot has no known general-transaction value,
+ *   `PeopleLiteAuth` field list this package cannot encode (one without the
+ *   revision field), when a slot has no known general-transaction value,
  *   or when the proof request fails or resolves malformed.
  * @throws {ProductIndividualityError} when `account` is not a valid address,
  *   or the chain serves no readable metadata or a malformed genesis hash.
@@ -409,7 +409,8 @@ if (import.meta.vitest) {
     // The chain the two-transaction lite flow ran live on (spec 1000036).
     const PREVIEWNET = blob("previewnet_individuality");
     const PASEO = blob("paseo_individuality");
-    // Predates the RevisionIndex field on the proof variants: a real negative.
+    // Same field list since its Paseo v2.5.2 re-pin, one extension more
+    // (CheckMetadataHash): the pipeline with the devnet-only row in the extras.
     const DEVNET = blob("devnet_individuality");
 
     const ACCOUNT = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
@@ -684,11 +685,15 @@ if (import.meta.vitest) {
             }
         });
 
-        test("rejects a chain whose PeopleLiteAuth predates the revision field", async () => {
-            // Devnet declares the proof variants without RevisionIndex. The
-            // round trip through the chain's own codec turns that into a loud
-            // error instead of a structurally plausible wrong encoding.
-            await expect(build(fakeChain(DEVNET).chain)).rejects.toThrow(AsPersonError);
+        test("builds on devnet, whose pipeline is one slot longer", async () => {
+            // Devnet declares CheckMetadataHash between ChargeAssetTxPayment and
+            // StorageWeightReclaim, the slot the extras table calls devnet-only.
+            // Its `Disabled` mode is one zero byte, so the extrinsic is 66 bytes
+            // and the compact prefix follows: ((66 << 2) | 0b01) little-endian.
+            const { transaction } = await build(fakeChain(DEVNET).chain);
+            expect(hex(transaction)).toBe(
+                `0x09014500${EXPECTED_EXTRAS}00${hex(CALL_DATA).slice(2)}`,
+            );
         });
 
         test("aborting while the proof is in flight throws instead of encoding", async () => {

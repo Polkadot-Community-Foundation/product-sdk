@@ -107,7 +107,7 @@ type LiteInviteTxArgs = {
  * The lite sign-up call, plus the reads that decide whether it can dispatch.
  * Composed with {@link GameChain} and {@link SignUpChain}, which supply the
  * game and the account-path reads. Matched by hand against the paseo and
- * previewnet descriptors on 2026-09-02 (devnet predates the surface):
+ * previewnet descriptors on 2026-09-02; devnet carries it since its Paseo v2.5.2 re-pin:
  *
  * ```
  * PeopleLite.AccountToAlias: StorageDescriptor<[Key: SS58String], { revision, ring, ca }, true, never>

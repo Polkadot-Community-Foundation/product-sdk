@@ -90,9 +90,10 @@ type DevnetSatisfiesConsumers = Assert<DevnetClient extends ConsumersChain ? tru
 type PreviewnetSatisfiesConsumers = Assert<PreviewnetClient extends ConsumersChain ? true : false>;
 
 // Separate from the personhood contract: reading draws needs neither `Resources`
-// nor `PeopleLite`. Both chains satisfy it, which is weaker than it looks — devnet's
-// event-id base is 28 bytes to paseo's 27, and `SizedHex<N>` erases `N`, so only the
-// length check in `airdrop-ids.ts` catches that.
+// nor `PeopleLite`. All three chains satisfy it, which is weaker than it looks:
+// `SizedHex<N>` erases `N`, so a chain with another event-id base width (devnet's
+// was 28 bytes before its re-pin) would pass here too, and only the length check
+// in `airdrop-ids.ts` catches that.
 type PaseoSatisfiesAirdropContract = Assert<PaseoClient extends AirdropChain ? true : false>;
 type DevnetSatisfiesAirdropContract = Assert<DevnetClient extends AirdropChain ? true : false>;
 type PreviewnetSatisfiesAirdropContract = Assert<
@@ -100,16 +101,16 @@ type PreviewnetSatisfiesAirdropContract = Assert<
 >;
 
 // Same again for the current-game contract, which shares no entry with either of
-// the other two — but paseo only, and that asymmetry is the point.
+// the other two.
 type PaseoSatisfiesGameContract = Assert<PaseoClient extends GameChain ? true : false>;
-// Previewnet is ahead of paseo, so it carries the game surface too (unlike devnet).
+// Previewnet is ahead of paseo, so it carries the game surface too.
 type PreviewnetSatisfiesGameContract = Assert<PreviewnetClient extends GameChain ? true : false>;
 
-// Devnet's metadata predates the multi-airdrop game work — the 28-byte base above is
-// one symptom, `game-types.ts` lists the rest — so the game surface is paseo-only.
-// Asserted negatively on purpose: a devnet re-pin breaks this line, which is the
-// prompt to flip it positive and check the read against it.
-type DevnetPredatesTheGameContract = Assert<DevnetClient extends GameChain ? false : true>;
+// Devnet's earlier metadata predated the multi-airdrop game work and was asserted
+// negatively here, as the prompt to flip on a re-pin. The Paseo v2.5.2 re-pin
+// (People 2005002) brought the 27-byte base, `airdrops_scheduled` and the rest of
+// what `game-types.ts` lists, so the game surface is now on all three chains.
+type DevnetSatisfiesGameContract = Assert<DevnetClient extends GameChain ? true : false>;
 
 // `GamePlayersChain` is the opt-in half of the game read (`players`), typed
 // separately so a caller who never asks about a player keeps the narrower
@@ -151,19 +152,21 @@ type PreviewnetSatisfiesScoreContext = Assert<
     PreviewnetClient extends ScoreContextChain ? true : false
 >;
 
-// The suffix moved from a constant to storage upstream, and the 2026-09-03 re-pin
-// brought that to both live chains. Devnet still predates it, so it holds the old
-// shape and is the one asserted negatively now.
+// The suffix moved from a constant to storage upstream; the 2026-09-03 re-pin
+// brought that to paseo and previewnet. Devnet never published the legacy
+// `Score.Suffix` constant (its old 2004003 pin had neither the constant nor the
+// storage) and the Paseo v2.5.2 re-pin gives it `NetworkSuffix` storage. No pinned
+// chain publishes the legacy constant.
 type PreviewnetPredatesTheLegacySuffix = Assert<
     PreviewnetClient extends LegacySuffixChain ? false : true
 >;
 type PaseoPredatesTheLegacySuffix = Assert<PaseoClient extends LegacySuffixChain ? false : true>;
-type DevnetPredatesTheLegacySuffix = Assert<DevnetClient extends LegacySuffixChain ? false : true>;
+type DevnetNeverHadTheLegacySuffix = Assert<DevnetClient extends LegacySuffixChain ? false : true>;
 type PreviewnetHasSuffixStorage = Assert<
     PreviewnetClient extends NetworkSuffixChain ? true : false
 >;
 type PaseoHasSuffixStorage = Assert<PaseoClient extends NetworkSuffixChain ? true : false>;
-type DevnetHasNoSuffixStorage = Assert<DevnetClient extends NetworkSuffixChain ? false : true>;
+type DevnetHasSuffixStorage = Assert<DevnetClient extends NetworkSuffixChain ? true : false>;
 
 // The two are declared separately, so a rename on either side would go
 // unnoticed anywhere but here.
@@ -214,15 +217,15 @@ type AirdropEventIdBase = Awaited<ReturnType<GameConstants["airdrop_event_id_bas
 type EventIdBaseIsAString = Assert<AirdropEventIdBase extends string ? true : false>;
 
 // The composed prize-status read spans both pallets, so it is the intersection
-// that has to hold — and on paseo only, since it inherits `GameChain`.
+// that has to hold, on every chain that carries `GameChain`.
 type PaseoSatisfiesPrizeStatusContract = Assert<
     PaseoClient extends PrizeStatusChain ? true : false
 >;
 type PreviewnetSatisfiesPrizeStatusContract = Assert<
     PreviewnetClient extends PrizeStatusChain ? true : false
 >;
-type DevnetPredatesThePrizeStatusContract = Assert<
-    DevnetClient extends PrizeStatusChain ? false : true
+type DevnetSatisfiesPrizeStatusContract = Assert<
+    DevnetClient extends PrizeStatusChain ? true : false
 >;
 
 // `Registrations` is keyed by the entropy slot with the entry as its *value*, so
@@ -333,26 +336,27 @@ type RejectsBogusSignUpClient = Assert<
     ClientWithoutIndividuality extends SignUpChain ? false : true
 >;
 
-// `SignUpChain` alone does not reject devnet and cannot: a `tx` argument is
-// checked contravariantly and excess-property checking does not apply between
-// named types, so an interface naming `airdrops` is satisfied by devnet's call,
-// which has only `airdrop`. `identifier_key` does not separate them either, since
-// `SizedHex<N>`'s brand is optional. Assert on the intersection the read takes,
-// where `GameChain` is the half that rejects devnet.
+// `SignUpChain` alone cannot reject a chain with the old call shape: a `tx`
+// argument is checked contravariantly and excess-property checking does not apply
+// between named types, so an interface naming `airdrops` is satisfied by a call
+// that has only `airdrop` (devnet's, before its re-pin). `identifier_key` does not
+// separate them either, since `SizedHex<N>`'s brand is optional. Assert on the
+// intersection the read takes, where `GameChain` is the half that would reject it.
 type PaseoSatisfiesSignUpRead = Assert<PaseoClient extends GameChain & SignUpChain ? true : false>;
 type PreviewnetSatisfiesSignUpRead = Assert<
     PreviewnetClient extends GameChain & SignUpChain ? true : false
 >;
-type DevnetPredatesTheSignUpRead = Assert<
-    DevnetClient extends GameChain & SignUpChain ? false : true
+type DevnetSatisfiesSignUpRead = Assert<
+    DevnetClient extends GameChain & SignUpChain ? true : false
 >;
 
-// The divergence itself: devnet's argument is `airdrop`, so `signUpWithAccountTx`
-// emitting `airdrops` would encode as `undefined` and enter no draw at all.
+// The old divergence, pinned by name: devnet's argument used to be `airdrop`, so
+// `signUpWithAccountTx` emitting `airdrops` encoded as `undefined` and entered no
+// draw at all. Since the Paseo v2.5.2 re-pin it takes `airdrops` like the others.
 type DevnetGameTx = DevnetClient["individuality"]["tx"]["Game"];
 type DevnetSignUpArgs = Parameters<DevnetGameTx["sign_up_with_account"]>[0];
-type DevnetHasNoAirdropsArg = Assert<"airdrops" extends keyof DevnetSignUpArgs ? false : true>;
-type DevnetHasTheSingularArg = Assert<"airdrop" extends keyof DevnetSignUpArgs ? true : false>;
+type DevnetHasTheAirdropsArg = Assert<"airdrops" extends keyof DevnetSignUpArgs ? true : false>;
+type DevnetDroppedTheSingularArg = Assert<"airdrop" extends keyof DevnetSignUpArgs ? false : true>;
 
 // Pinned by name for the same reason `claim_airdrop`'s are: PAPI encodes the
 // object it is handed, so a renamed field silently encodes as `undefined`.
@@ -402,15 +406,15 @@ type RejectsItemMissingValue = Assert<
 >;
 
 // The lite sign-up surface: the alias binding, the lite-person marker, the
-// invite pin, the ring membership entry and the free sign-up call. Paseo and
-// previewnet carry all five; devnet predates `Game.LiteInvites` and the call,
-// so it is asserted negatively, like the game surface it composes with.
+// invite pin, the ring membership entry and the free sign-up call. All three
+// chains carry all five; devnet gained `Game.LiteInvites` and the call on its
+// Paseo v2.5.2 re-pin, with the game surface it composes with.
 type PaseoSatisfiesLiteSignUpContract = Assert<PaseoClient extends LiteSignUpChain ? true : false>;
 type PreviewnetSatisfiesLiteSignUpContract = Assert<
     PreviewnetClient extends LiteSignUpChain ? true : false
 >;
-type DevnetPredatesTheLiteSignUpContract = Assert<
-    DevnetClient extends LiteSignUpChain ? false : true
+type DevnetSatisfiesLiteSignUpContract = Assert<
+    DevnetClient extends LiteSignUpChain ? true : false
 >;
 type RejectsBogusLiteSignUpClient = Assert<
     ClientWithoutIndividuality extends LiteSignUpChain ? false : true
@@ -422,18 +426,23 @@ type LiteSignUpReadBase = GameChain & SignUpChain & ScoreContextChain & LiteSign
 type PaseoSatisfiesTheLiteReadWithATld = Assert<
     PaseoClient extends LiteSignUpReadBase ? true : false
 >;
-// Both chains resolve the suffix from storage since the 2026-09-03 re-pin, so the
-// storage overload is the live path and neither can use the constant one.
+// Every chain resolves the suffix from storage since the 2026-09-03 re-pin (devnet
+// since its own), so the storage overload is the live path and none can use the
+// constant one.
 type PaseoSatisfiesTheLiteReadFromStorage = Assert<
     PaseoClient extends LiteSignUpReadBase & NetworkSuffixChain ? true : false
 >;
 type PreviewnetSatisfiesTheLiteReadFromStorage = Assert<
     PreviewnetClient extends LiteSignUpReadBase & NetworkSuffixChain ? true : false
 >;
-type NeitherChainHasTheLegacyConstant = Assert<
-    PaseoClient | PreviewnetClient extends LiteSignUpReadBase & LegacySuffixChain ? false : true
+type DevnetSatisfiesTheLiteReadFromStorage = Assert<
+    DevnetClient extends LiteSignUpReadBase & NetworkSuffixChain ? true : false
 >;
-type DevnetPredatesTheLiteRead = Assert<DevnetClient extends LiteSignUpReadBase ? false : true>;
+type NoChainHasTheLegacyConstant = Assert<
+    PaseoClient | PreviewnetClient | DevnetClient extends LiteSignUpReadBase & LegacySuffixChain
+        ? false
+        : true
+>;
 
 // Wider than the reads above: the builder assembles the extrinsic itself, so it
 // needs the chain spec and the metadata blob, not just the call.

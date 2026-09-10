@@ -9,9 +9,10 @@
  * afterwards, so re-deriving would contradict storage. {@link GameTimeline} is
  * therefore only on {@link GameSchedulePreview}, where play time is all there is.
  *
- * **Paseo only.** Devnet's metadata predates this work — one optional prize per
- * schedule, no `airdrops_scheduled`, an extra `airdrop_claim_window` — so a devnet
- * client fails `GameChain`, which the umbrella's contract test asserts deliberately.
+ * **Every pinned chain**, since devnet's Paseo v2.5.2 re-pin. Devnet's earlier
+ * metadata predated this work — one optional prize per schedule, no
+ * `airdrops_scheduled`, an extra `airdrop_claim_window` — and failed `GameChain`;
+ * the umbrella's contract test now asserts all three satisfy it.
  */
 import type { AirdropPrize } from "./airdrop-types.js";
 import type { FinalizedSnapshot } from "./types.js";
