@@ -9,7 +9,7 @@
  * `(proof, ringIndex, revision, context)` tuple on its proof variants. All
  * three traps documented at the top of `as-person-codec.ts` apply here
  * unchanged, including the field-list one: the deployed runtimes carry a
- * `RevisionIndex` in both proof variants that the devnet blob predates, so
+ * `RevisionIndex` in both proof variants that older blobs lacked, so
  * every value is round-tripped through the codec built from the blob actually
  * being signed against, and a chain declaring a different field list is a loud
  * `AsPersonError` rather than a structurally plausible wrong encoding.
@@ -128,8 +128,9 @@ if (import.meta.vitest) {
 
     const PASEO = readExtensionPipeline(blob("paseo_individuality"));
     const PREVIEWNET = readExtensionPipeline(blob("previewnet_individuality"));
-    // The devnet blob predates the RevisionIndex field on the proof variants,
-    // so it is a real negative case for the deployed field list.
+    // Devnet declares the same field list since its Paseo v2.5.2 re-pin, and
+    // one extension more than the other two, so it pins the codec against a
+    // pipeline that is longer but not different where it matters.
     const DEVNET = readExtensionPipeline(blob("devnet_individuality"));
 
     /** Local hex formatter, deliberately not the one the code under test uses. */
@@ -188,9 +189,10 @@ if (import.meta.vitest) {
             expect(hex(bytes)).toBe(`0x0103090000000caabbcc0400000005000000${CONTEXT_HEX}`);
         });
 
-        test("previewnet and paseo agree on the encoding", () => {
+        test("every individuality chain agrees on the encoding", () => {
             // Previewnet is the chain the two-transaction lite flow was verified
-            // on, so its blob is pinned alongside the descriptor chain's.
+            // on, so its blob is pinned alongside the descriptor chain's. Devnet
+            // joined on its Paseo v2.5.2 re-pin, which brought the revision field.
             for (const value of [
                 { tag: "AsLiteAliasWithAccount", nonce: 7 },
                 {
@@ -201,9 +203,11 @@ if (import.meta.vitest) {
                     context: CONTEXT,
                 },
             ] as const) {
-                expect(hex(encodePeopleLiteAuthInfo(PREVIEWNET, value))).toBe(
-                    hex(encodePeopleLiteAuthInfo(PASEO, value)),
-                );
+                for (const pipeline of [PREVIEWNET, DEVNET]) {
+                    expect(hex(encodePeopleLiteAuthInfo(pipeline, value))).toBe(
+                        hex(encodePeopleLiteAuthInfo(PASEO, value)),
+                    );
+                }
             }
         });
 
@@ -216,42 +220,6 @@ if (import.meta.vitest) {
                 context: CONTEXT,
             });
             expect(hex(bytes).endsWith(CONTEXT_HEX)).toBe(true);
-        });
-
-        test("rejects a proof variant on a chain without the revision field", () => {
-            // Devnet's PeopleLiteAuthData predates RevisionIndex. An encoder
-            // that guessed the field list would emit a structurally plausible
-            // value there; the round trip through the chain's own codec is what
-            // turns that into a loud error instead.
-            for (const value of [
-                {
-                    tag: "AsLiteAliasWithProof",
-                    proof: PROOF,
-                    ringIndex: 4,
-                    revision: 5,
-                    context: CONTEXT,
-                },
-                {
-                    tag: "AsLiteAliasWithAccountRevised",
-                    nonce: 9,
-                    proof: PROOF,
-                    ringIndex: 4,
-                    revision: 5,
-                    context: CONTEXT,
-                },
-            ] as const) {
-                expect(() => encodePeopleLiteAuthInfo(DEVNET, value)).toThrow(AsPersonError);
-            }
-        });
-
-        test("the account variant still encodes on that chain", () => {
-            // Proves the rejection above is about the field list, not a blob
-            // this encoder simply cannot work with.
-            const bytes = encodePeopleLiteAuthInfo(DEVNET, {
-                tag: "AsLiteAliasWithAccount",
-                nonce: 7,
-            });
-            expect(hex(bytes)).toBe("0x010107000000");
         });
 
         test("throws for a chain that does not declare PeopleLiteAuth", () => {
