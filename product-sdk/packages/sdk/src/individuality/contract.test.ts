@@ -153,13 +153,15 @@ type PreviewnetSatisfiesScoreContext = Assert<
 >;
 
 // The suffix moved from a constant to storage upstream; the 2026-09-03 re-pin
-// brought that to paseo and previewnet, and the Paseo v2.5.2 re-pin to devnet. No
-// pinned chain publishes the legacy constant any more.
+// brought that to paseo and previewnet. Devnet never published the legacy
+// `Score.Suffix` constant (its old 2004003 pin had neither the constant nor the
+// storage) and the Paseo v2.5.2 re-pin gives it `NetworkSuffix` storage. No pinned
+// chain publishes the legacy constant.
 type PreviewnetPredatesTheLegacySuffix = Assert<
     PreviewnetClient extends LegacySuffixChain ? false : true
 >;
 type PaseoPredatesTheLegacySuffix = Assert<PaseoClient extends LegacySuffixChain ? false : true>;
-type DevnetDroppedTheLegacySuffix = Assert<DevnetClient extends LegacySuffixChain ? false : true>;
+type DevnetNeverHadTheLegacySuffix = Assert<DevnetClient extends LegacySuffixChain ? false : true>;
 type PreviewnetHasSuffixStorage = Assert<
     PreviewnetClient extends NetworkSuffixChain ? true : false
 >;

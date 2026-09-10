@@ -21,7 +21,7 @@ green `pnpm typecheck` here does not clear consumers.
 
 | Chain | Removed | Added |
 | --- | --- | --- |
-| `devnet-individuality` | `AuthorizeValueTransfer` transaction extension, `Score.Suffix` constant | pallets `NetworkSuffix`, `Parameters`, `AssetConversion`, `PoolAssets`, `RelayRandomness` |
+| `devnet-individuality` | `AuthorizeValueTransfer` transaction extension | pallets `RelayRandomness`, `AssetConversion`, `PoolAssets`, `Parameters`, `NetworkSuffix` |
 | `devnet-asset-hub` | `AuthorizeValueTransfer` and `AsRingAlias` transaction extensions | pallet `NetworkSuffix` |
 
 Slot 0 of the origin-modifier pipeline is `UnitTransactionExtension` on both chains now.
