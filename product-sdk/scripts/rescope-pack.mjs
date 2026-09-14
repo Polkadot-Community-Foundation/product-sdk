@@ -10,21 +10,38 @@
  * under its own scope, so the dotns UI + playground-constellation can consume
  * devnet. Mirrors polkadot-app-deploy + cdm-env + browse-sdk rescope-at-pack.
  *
- * Six packages are rescoped — the three that carry the devnet changes / are
+ * Eight packages are rescoped — the three that carry the devnet changes / are
  * imported by the consumers, the two zero-dependency leaf packages `host`
  * transitively needs (they are NOT published on the @parity npm scope, so they
- * must also be PCF-scoped for the graph to fully close), and `terminal`, which
+ * must also be PCF-scoped for the graph to fully close), `terminal`, which
  * carries the QR-pairing fix (host-papp 0.10.0 / 32-byte X25519 handshake key)
- * that the @parity npm releases do not yet have:
+ * that the @parity npm releases do not yet have, and `keys` + `utils`, which
+ * carry the RFC-0022 product-account derivation fix (see below):
  *   @parity/product-sdk-descriptors   -> @polkadot-community-foundation/product-sdk-descriptors
  *   @parity/product-sdk-chain-client  -> @polkadot-community-foundation/product-sdk-chain-client
  *   @parity/product-sdk-host          -> @polkadot-community-foundation/product-sdk-host
  *   @parity/product-sdk-errors        -> @polkadot-community-foundation/product-sdk-errors
  *   @parity/result                    -> @polkadot-community-foundation/result   (base name kept, no product-sdk- prefix)
  *   @parity/product-sdk-terminal      -> @polkadot-community-foundation/product-sdk-terminal
+ *   @parity/product-sdk-keys          -> @polkadot-community-foundation/product-sdk-keys
+ *   @parity/product-sdk-utils         -> @polkadot-community-foundation/product-sdk-utils
  * Every other @parity/* dep left in a rescoped tarball (e.g. product-sdk-logger,
  * truapi) stays @parity and MUST already be published on npm — the script logs
  * each one so CI surfaces any that is not.
+ *
+ * WHY `keys` + `utils` are in the set (RFC-0022):
+ * `terminal` externalises `@parity/product-sdk-keys` (tsup keeps declared deps
+ * out of the bundle), so a rescoped `terminal` tarball that keeps that dep at
+ * @parity resolves `deriveProductAccountPublicKey` from the npm release. npm
+ * has keys@0.3.24, and `pnpm pack` resolves `workspace:*` to that same 0.3.24 —
+ * so the published-version check below goes GREEN while the installed code is
+ * the PRE-RFC-0022 implementation with the old 3-arg signature. Calling it with
+ * the new 2-arg `(subtreeKey, {tag:"Index"})` shape does not throw; it returns a
+ * DIFFERENT, wrong public key. That is precisely the silent-wrong-address defect
+ * RFC-0022 fixes, reintroduced by packaging. `keys` in turn needs the new
+ * `derivationIndexBytes` from `utils`, which npm's utils@0.1.1 does not export,
+ * so `utils` comes along too. Both must leave this fork under the PCF scope for
+ * the fix to actually reach a consumer.
  *
  * Assumes the packages are already built (`pnpm build` ran in CI before this).
  * Step 1 uses `pnpm pack` (NOT `npm pack`) so pnpm resolves the `workspace:*`
@@ -56,6 +73,8 @@ const RESCOPE = {
     errors: "@parity/product-sdk-errors",
     result: "@parity/result",
     terminal: "@parity/product-sdk-terminal",
+    keys: "@parity/product-sdk-keys",
+    utils: "@parity/product-sdk-utils",
 };
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
@@ -113,19 +132,30 @@ mkdirSync(OUT_DIR, { recursive: true });
 // @parity/* deps that are legitimately left at @parity because they ARE
 // published on npm. Any kept @parity dep NOT in this set is flagged loudly — it
 // would make the tarball uninstallable. Verified on npm at the time of writing:
-// product-sdk-logger@0.1.1, truapi@0.3.2, and — pulled in by `terminal` —
-// product-sdk-keys@0.3.24, product-sdk-signer@0.14.4.
+// product-sdk-logger@0.1.1, truapi@0.3.2, product-sdk-signer@0.14.4 (pulled in
+// by `terminal`), and — pulled in by `keys` — product-sdk-address@0.2.0,
+// product-sdk-crypto@0.1.1, product-sdk-local-storage@0.3.9. None of those
+// three changed in the RFC-0022 wave, so the npm code matches the tree.
 //
 // `pnpm pack` resolves `workspace:*` to the EXACT in-tree version, so a kept
 // @parity dep is only installable while that exact version is on npm. Bumping
 // one in-tree ahead of an upstream npm release makes the staged tarball
 // uninstallable; the version is printed next to each kept dep below so a
 // reviewer can check.
+//
+// CAVEAT this check cannot make: matching versions do NOT prove matching code.
+// A package changed in-tree WITHOUT a version bump resolves to a same-numbered
+// npm release carrying the OLD implementation, and this set goes green anyway.
+// That is exactly how keys@0.3.24 silently reverted the RFC-0022 derivation
+// before `keys`/`utils` joined RESCOPE. When a kept dep's source changes in a
+// wave, rescope it or bump it — do not rely on this list.
 const KNOWN_PUBLISHED_PARITY = new Set([
     "@parity/product-sdk-logger",
     "@parity/truapi",
-    "@parity/product-sdk-keys",
     "@parity/product-sdk-signer",
+    "@parity/product-sdk-address",
+    "@parity/product-sdk-crypto",
+    "@parity/product-sdk-local-storage",
 ]);
 
 const results = [];
