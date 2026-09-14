@@ -10,15 +10,18 @@
  * under its own scope, so the dotns UI + playground-constellation can consume
  * devnet. Mirrors polkadot-app-deploy + cdm-env + browse-sdk rescope-at-pack.
  *
- * Five packages are rescoped — the three that carry the devnet changes / are
- * imported by the consumers, plus the two zero-dependency leaf packages `host`
+ * Six packages are rescoped — the three that carry the devnet changes / are
+ * imported by the consumers, the two zero-dependency leaf packages `host`
  * transitively needs (they are NOT published on the @parity npm scope, so they
- * must also be PCF-scoped for the graph to fully close):
+ * must also be PCF-scoped for the graph to fully close), and `terminal`, which
+ * carries the QR-pairing fix (host-papp 0.10.0 / 32-byte X25519 handshake key)
+ * that the @parity npm releases do not yet have:
  *   @parity/product-sdk-descriptors   -> @polkadot-community-foundation/product-sdk-descriptors
  *   @parity/product-sdk-chain-client  -> @polkadot-community-foundation/product-sdk-chain-client
  *   @parity/product-sdk-host          -> @polkadot-community-foundation/product-sdk-host
  *   @parity/product-sdk-errors        -> @polkadot-community-foundation/product-sdk-errors
  *   @parity/result                    -> @polkadot-community-foundation/result   (base name kept, no product-sdk- prefix)
+ *   @parity/product-sdk-terminal      -> @polkadot-community-foundation/product-sdk-terminal
  * Every other @parity/* dep left in a rescoped tarball (e.g. product-sdk-logger,
  * truapi) stays @parity and MUST already be published on npm — the script logs
  * each one so CI surfaces any that is not.
@@ -52,6 +55,7 @@ const RESCOPE = {
     host: "@parity/product-sdk-host",
     errors: "@parity/product-sdk-errors",
     result: "@parity/result",
+    terminal: "@parity/product-sdk-terminal",
 };
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
@@ -62,7 +66,7 @@ const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
 // package -> a consumer bundler (Rollup/vite) fails to resolve them. So after
 // packing we also rewrite those specifiers inside the shipped text files.
 //
-// Only the five rescoped names are rewritten, and only as WHOLE specifiers: the
+// Only the rescoped names are rewritten, and only as WHOLE specifiers: the
 // negative lookahead `(?![A-Za-z0-9-])` forbids a trailing identifier/dash char
 // so `@parity/product-sdk-logger`, `@parity/product-sdk-*` (a JSDoc glob) and
 // any other longer @parity name are left untouched, while a subpath like
@@ -85,7 +89,7 @@ const listRewriteTargets = (dir) => {
     return out;
 };
 
-// Rewrite the five rescoped specifiers in every shipped text file under `root`.
+// Rewrite the rescoped specifiers in every shipped text file under `root`.
 // Returns the number of files changed.
 const rewriteDistSpecifiers = (root) => {
     let changed = 0;
@@ -107,10 +111,22 @@ if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true });
 mkdirSync(OUT_DIR, { recursive: true });
 
 // @parity/* deps that are legitimately left at @parity because they ARE
-// published on npm (verified: product-sdk-logger@0.1.1, truapi@0.3.2). Any kept
-// @parity dep NOT in this set is flagged loudly — it would make the tarball
-// uninstallable.
-const KNOWN_PUBLISHED_PARITY = new Set(["@parity/product-sdk-logger", "@parity/truapi"]);
+// published on npm. Any kept @parity dep NOT in this set is flagged loudly — it
+// would make the tarball uninstallable. Verified on npm at the time of writing:
+// product-sdk-logger@0.1.1, truapi@0.3.2, and — pulled in by `terminal` —
+// product-sdk-keys@0.3.24, product-sdk-signer@0.14.4.
+//
+// `pnpm pack` resolves `workspace:*` to the EXACT in-tree version, so a kept
+// @parity dep is only installable while that exact version is on npm. Bumping
+// one in-tree ahead of an upstream npm release makes the staged tarball
+// uninstallable; the version is printed next to each kept dep below so a
+// reviewer can check.
+const KNOWN_PUBLISHED_PARITY = new Set([
+    "@parity/product-sdk-logger",
+    "@parity/truapi",
+    "@parity/product-sdk-keys",
+    "@parity/product-sdk-signer",
+]);
 
 const results = [];
 let sawUnpublishedRisk = false;
@@ -131,7 +147,7 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     // Rewrite the package's own name.
     pkg.name = rescopedName(upstreamName);
 
-    // Rewrite cross-deps AMONG the three rescoped packages to the new scope.
+    // Rewrite cross-deps AMONG the rescoped packages to the new scope.
     // Every OTHER @parity/* dep stays @parity (must already be on npm).
     for (const depField of ["dependencies", "peerDependencies", "optionalDependencies"]) {
         const deps = pkg[depField];
@@ -161,7 +177,7 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     if (pkg.scripts) delete pkg.scripts.prepare;
     writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + "\n");
 
-    // Step 1b: rewrite the five rescoped specifiers inside the extracted,
+    // Step 1b: rewrite the rescoped specifiers inside the extracted,
     // shipped code (dist/ + any source) so the compiled imports/requires match
     // the rescoped names. Without this the tarball's package.json is PCF-scoped
     // but its dist code still `import`s `@parity/result` etc. -> unresolvable.
