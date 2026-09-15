@@ -1,6 +1,6 @@
 {
     "name": "@parity/product-sdk-signer",
-    "version": "0.14.4",
+    "version": "0.14.5",
     "description": "Signer manager for Polkadot — Host API and dev accounts",
     "type": "module",
     "sideEffects": false,
@@ -21,7 +21,10 @@
             "types": "./dist/errors.d.ts"
         }
     },
-    "files": ["dist", "src"],
+    "files": [
+        "dist",
+        "src"
+    ],
     "scripts": {
         "build": "tsup",
         "test": "vitest",

@@ -1,6 +1,6 @@
 {
     "name": "@parity/product-sdk",
-    "version": "0.27.0",
+    "version": "0.28.0",
     "description": "Unified SDK for building products in the Polkadot ecosystem - umbrella package",
     "type": "module",
     "sideEffects": false,
@@ -65,7 +65,10 @@
             "types": "./dist/testing/index.d.ts"
         }
     },
-    "files": ["dist", "src"],
+    "files": [
+        "dist",
+        "src"
+    ],
     "scripts": {
         "build": "NODE_OPTIONS=--max-old-space-size=8192 tsup",
         "test": "vitest run",
@@ -104,6 +107,12 @@
         "typescript": "^5.7.0",
         "vitest": "^3.0.0"
     },
-    "keywords": ["polkadot", "parity", "sdk", "blockchain", "web3"],
+    "keywords": [
+        "polkadot",
+        "parity",
+        "sdk",
+        "blockchain",
+        "web3"
+    ],
     "license": "Apache-2.0"
 }

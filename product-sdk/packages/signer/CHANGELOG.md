@@ -1,5 +1,12 @@
 # @parity/product-sdk-signer
 
+## 0.14.5
+
+### Patch Changes
+
+- Updated dependencies
+  - @parity/product-sdk-keys@0.4.0
+
 ## 0.14.4
 
 ### Patch Changes
