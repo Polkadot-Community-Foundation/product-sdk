@@ -23,9 +23,7 @@
             "import": "./dist/testing.js"
         }
     },
-    "files": [
-        "dist"
-    ],
+    "files": ["dist"],
     "sideEffects": false,
     "publishConfig": {
         "access": "public"

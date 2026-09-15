@@ -21,10 +21,7 @@
             "types": "./dist/errors.d.ts"
         }
     },
-    "files": [
-        "dist",
-        "src"
-    ],
+    "files": ["dist", "src"],
     "scripts": {
         "build": "tsup",
         "test": "vitest",
