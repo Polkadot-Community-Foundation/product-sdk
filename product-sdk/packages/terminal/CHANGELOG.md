@@ -1,5 +1,13 @@
 # @parity/product-sdk-terminal
 
+## 0.9.1
+
+### Patch Changes
+
+- Repackaging only; no code change from 0.9.0.
+
+  0.9.0 was published uninstallable. `pnpm pack` freezes `workspace:*` to the exact in-tree version, the release wave had bumped `@parity/product-sdk-signer` to 0.14.5 in-tree, and upstream never published that version — so `npm i` failed with `ETARGET`. `signer` is now rescoped alongside the other packages PCF publishes, and the packing script verifies every kept `@parity` dependency against npm at its exact version, failing the pack instead of shipping a broken tarball.
+
 ## 0.9.0
 
 ### Minor Changes
