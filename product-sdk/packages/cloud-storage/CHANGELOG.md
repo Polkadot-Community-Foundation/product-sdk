@@ -1,5 +1,11 @@
 # @parity/product-sdk-bulletin
 
+## 0.11.4
+
+### Patch Changes
+
+- @parity/product-sdk-tx@0.4.8
+
 ## 0.11.3
 
 ### Patch Changes
