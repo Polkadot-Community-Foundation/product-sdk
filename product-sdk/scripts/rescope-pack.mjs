@@ -75,6 +75,7 @@ const RESCOPE = {
     terminal: "@parity/product-sdk-terminal",
     keys: "@parity/product-sdk-keys",
     utils: "@parity/product-sdk-utils",
+    signer: "@parity/product-sdk-signer",
 };
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
@@ -129,37 +130,23 @@ const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: ["ignore", "pipe", "inheri
 if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true });
 mkdirSync(OUT_DIR, { recursive: true });
 
-// @parity/* deps that are legitimately left at @parity because they ARE
-// published on npm. Any kept @parity dep NOT in this set is flagged loudly — it
-// would make the tarball uninstallable. Verified on npm at the time of writing:
-// product-sdk-logger@0.1.1, truapi@0.3.2, product-sdk-signer@0.14.4 (pulled in
-// by `terminal`), and — pulled in by `keys` — product-sdk-address@0.2.0,
-// product-sdk-crypto@0.1.1, product-sdk-local-storage@0.3.9. None of those
-// three changed in the RFC-0022 wave, so the npm code matches the tree.
-//
-// `pnpm pack` resolves `workspace:*` to the EXACT in-tree version, so a kept
-// @parity dep is only installable while that exact version is on npm. Bumping
-// one in-tree ahead of an upstream npm release makes the staged tarball
-// uninstallable; the version is printed next to each kept dep below so a
-// reviewer can check.
-//
-// CAVEAT this check cannot make: matching versions do NOT prove matching code.
-// A package changed in-tree WITHOUT a version bump resolves to a same-numbered
-// npm release carrying the OLD implementation, and this set goes green anyway.
-// That is exactly how keys@0.3.24 silently reverted the RFC-0022 derivation
-// before `keys`/`utils` joined RESCOPE. When a kept dep's source changes in a
-// wave, rescope it or bump it — do not rely on this list.
+// @parity/* deps deliberately left at @parity because upstream publishes them.
+// This set is DOCUMENTATION of an expected keep, not a bypass: every kept dep is
+// verified against npm at its exact version by the hard gate at the end of this
+// script, whether or not it appears here. It used to be a bypass, which is how
+// terminal 0.9.0 shipped naming signer@0.14.5 — a version upstream never
+// published — and died on install with ETARGET.
 const KNOWN_PUBLISHED_PARITY = new Set([
     "@parity/product-sdk-logger",
     "@parity/truapi",
-    "@parity/product-sdk-signer",
     "@parity/product-sdk-address",
     "@parity/product-sdk-crypto",
     "@parity/product-sdk-local-storage",
 ]);
 
 const results = [];
-let sawUnpublishedRisk = false;
+/** Every @parity dep left un-rescoped, verified against npm before we finish. */
+const keptParityDeps = [];
 
 for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     const pkgDir = join(PKGS_DIR, dir);
@@ -188,14 +175,16 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
                 delete deps[depName];
                 deps[rescopedName(depName)] = version;
             } else if (depName.startsWith("@parity/")) {
-                // Left at @parity — must already be published on npm.
+                // Left at @parity — must already be published on npm. Recorded
+                // for the hard existence check below; membership in
+                // KNOWN_PUBLISHED_PARITY documents an EXPECTED keep, it does not
+                // excuse one from being verified.
                 console.log(`[rescope-pack]   ${pkg.name} keeps @parity dep ${depName}@${deps[depName]}`);
+                keptParityDeps.push({ consumer: pkg.name, depName, range: deps[depName] });
                 if (!KNOWN_PUBLISHED_PARITY.has(depName)) {
                     console.log(
-                        `[rescope-pack]   ⚠️  WARN: ${depName}@${deps[depName]} is not in the known-published ` +
-                            `@parity set -> verify it is on npm, or ${pkg.name} will be UNINSTALLABLE.`,
+                        `[rescope-pack]   note: ${depName} is not in the known-published @parity set.`,
                     );
-                    sawUnpublishedRisk = true;
                 }
             }
         }
@@ -226,14 +215,40 @@ console.log("\n[rescope-pack] staged tarballs:");
 for (const f of readdirSync(OUT_DIR).filter((f) => f.endsWith(".tgz"))) {
     console.log(`  ${join(OUT_DIR, f)}`);
 }
-if (sawUnpublishedRisk) {
-    console.log(
-        "\n[rescope-pack] ⚠️  One or more rescoped tarballs keep an @parity dep outside the known-published " +
-            "set (see WARN above). Verify it is on npm, or the tarball will be uninstallable.",
-    );
-} else {
-    console.log(
-        "\n[rescope-pack] ✓ Graph closed: every dep in every rescoped tarball is either PCF-scoped (in-set) " +
-            "or a published @parity/third-party package.",
-    );
+// Hard gate. `pnpm pack` freezes `workspace:*` to the EXACT in-tree version, so
+// any package this fork bumps ahead of an upstream npm release leaves a dep
+// pointing at a version that does not exist. That is not hypothetical: terminal
+// 0.9.0 shipped naming @parity/product-sdk-signer@0.14.5, which upstream never
+// published, and `npm i` died with ETARGET. The old check could not catch it —
+// signer was in KNOWN_PUBLISHED_PARITY, and membership SKIPPED verification
+// entirely. Worse, the "risk" path only printed; it never failed the build.
+//
+// So: ask npm about every kept dep at its exact version, and exit non-zero on a
+// miss. Better to fail the pack than to publish an uninstallable tarball.
+const missing = [];
+for (const { consumer, depName, range } of keptParityDeps) {
+    const version = String(range).replace(/^[\^~]/, "");
+    let found = false;
+    try {
+        found = run(`npm view ${depName}@${version} version`, WORKSPACE_DIR).trim().length > 0;
+    } catch {
+        found = false;
+    }
+    console.log(`[rescope-pack]   verify ${depName}@${version} on npm -> ${found ? "ok" : "MISSING"}`);
+    if (!found) missing.push(`${depName}@${version} (kept by ${consumer})`);
 }
+
+if (missing.length > 0) {
+    console.error(
+        "\n[rescope-pack] ✗ REFUSING to stage: these kept @parity deps are not on npm, so the " +
+            "tarballs would be UNINSTALLABLE:\n" +
+            missing.map((m) => `    ${m}`).join("\n") +
+            "\n  Fix by rescoping the package (add it to RESCOPE) or pinning the dep back to a published version.",
+    );
+    process.exit(1);
+}
+
+console.log(
+    "\n[rescope-pack] ✓ Graph closed: every dep in every rescoped tarball is either PCF-scoped (in-set) " +
+        "or verified present on npm at the exact version named.",
+);
