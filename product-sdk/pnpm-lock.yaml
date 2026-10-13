@@ -998,9 +998,6 @@ importers:
       '@novasamatech/statement-store':
         specifier: 0.12.0
         version: 0.12.0(esbuild@0.28.1)(rxjs@7.8.2)
-      '@novasamatech/storage-adapter':
-        specifier: 0.12.0
-        version: 0.12.0
       '@parity/product-sdk-host':
         specifier: workspace:*
         version: link:../host
