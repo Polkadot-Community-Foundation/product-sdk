@@ -1,5 +1,24 @@
 # @parity/product-sdk
 
+## 0.37.0
+
+### Minor Changes
+
+- d076015: `ChatManager.sendMessage` takes an optional `{ alt }`, one line describing the message that a host shows where it lists the message rather than draws it, such as the chat list preview of a custom card.
+
+### Patch Changes
+
+- Updated dependencies [d076015]
+- Updated dependencies [d076015]
+  - @parity/product-sdk-host@0.27.0
+  - @parity/product-sdk-cloud-storage@0.13.1
+  - @parity/product-sdk-chain-client@0.13.1
+  - @parity/product-sdk-local-storage@0.3.17
+  - @parity/product-sdk-signer@0.17.1
+  - @parity/product-sdk-keys@0.5.1
+  - @parity/product-sdk-contracts@0.11.1
+  - @parity/product-sdk-tx@0.5.1
+
 ## 0.36.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @parity/product-sdk-bulletin
 
+## 0.13.1
+
+### Patch Changes
+
+- d076015: Cloud storage uploads work on polkadot-api 3 again: `@parity/bulletin-sdk` moves to 0.5.0, which submits through `createSubmitAndWatch`, and `verifyStored` reads the hex `content_hash` polkadot-api 3 returns.
+- Updated dependencies [d076015]
+  - @parity/product-sdk-host@0.27.0
+  - @parity/product-sdk-chain-client@0.13.1
+  - @parity/product-sdk-tx@0.5.1
+
 ## 0.13.0
 
 ### Minor Changes
