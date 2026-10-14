@@ -127,6 +127,7 @@ export type {
     ChatCustomMessageRenderingRequest,
     ChatCustomMessageRenderingRequestHandler,
     ChatCustomMessageRenderingRegistration,
+    ChatSendMessageOptions,
 } from "./chat.js";
 
 // Renderer (the shared `onRender` slot)
