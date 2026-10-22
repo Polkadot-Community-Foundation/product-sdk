@@ -65,10 +65,13 @@ jobs:
         # The same-repository check is belt and braces: a fork PR gets no
         # secrets, so it would fail at the publish step anyway, but failing
         # here says why.
+        #
+        # PCF fork: gated off. It needs Parity's self-hosted runner and publish
+        # automation; PCF publishes through pcf-publish-product-sdk.yml.
         if: >-
-            github.event_name == 'workflow_dispatch' ||
+            false && (github.event_name == 'workflow_dispatch' ||
             (startsWith(github.event.label.name, 'dev-publish-') &&
-            github.event.pull_request.head.repo.full_name == github.repository)
+            github.event.pull_request.head.repo.full_name == github.repository))
         name: "Publish dev.${{ github.event.pull_request.number || inputs.pr }}"
         runs-on: parity-default
         timeout-minutes: 20
