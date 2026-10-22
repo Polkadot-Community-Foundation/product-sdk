@@ -1,10 +1,786 @@
 # @parity/product-sdk
 
-## 0.28.0
+## 0.40.0
 
 ### Minor Changes
 
-- **Product accounts derive the RFC-0022 way.** The previous derivation predated RFC-0022 and matched no shipping host, so every product-account address the SDK produced was wrong. It failed closed: the wallet resolves an account selector rather than a key, so it signed as the correct account, but the wrong key drove the nonce lookup and everything else PAPI computes around the signature, and it is the address `packages/auth` displayed.
+- e9bfd25: **Pair with a truapi 0.26.0 host.** `@parity/truapi` moves from `^0.25.0` to `^0.26.0`. The codec version stays at 3, but `TRUAPI_WIRE_SCHEMA_HASH` moves from `3c45e49b26c1ab97` to `5f68beddf80f7b9a`, so the schema a product speaks no longer matches a host still on 0.25.0. Every host surface has to move in the same window.
+
+  **Surface changes carried through `@parity/product-sdk-host`.** truapi 0.26 makes the caller own the id for a payment and a top-up, so a reload can keep watching an in-flight session and a retry is idempotent. `PaymentManager.requestPayment` and `topUp` now take an optional `id` (a random 32-byte hex by default) and both return `{ id }`; `subscribePaymentStatus`'s first argument is that same `id`. truapi also adds a `funding` domain (modeled as not-supported by the testing fake) and a `BalanceAccess` remote permission, which passes through `requestPermission` unchanged.
+
+### Patch Changes
+
+- Updated dependencies [e9bfd25]
+  - @parity/product-sdk-host@0.29.0
+  - @parity/product-sdk-renderer@0.8.0
+  - @parity/product-sdk-chain-client@0.13.4
+  - @parity/product-sdk-cloud-storage@0.13.4
+  - @parity/product-sdk-individuality@0.11.1
+  - @parity/product-sdk-local-storage@0.3.20
+  - @parity/product-sdk-signer@0.17.4
+  - @parity/product-sdk-keys@0.5.4
+  - @parity/product-sdk-contracts@0.11.4
+  - @parity/product-sdk-tx@0.5.4
+
+## 0.39.0
+
+### Minor Changes
+
+- 45dc779: **A host call that gets no answer in time fails with `HostTimeoutError`, whose message no longer blames a protocol-version skew.**
+
+  A truapi `RequestTimeoutError` becomes `HostTimeoutError`, which names the call and how long the client waited, and keeps the original error as `cause`. It is a subclass of `HostResponseDecodeError`, so existing `instanceof HostResponseDecodeError` checks and `WithDecodeError<E>` still cover it; check `instanceof HostTimeoutError` to tell a timeout apart.
+
+- 45dc779: Add game registration in one call, so every product that signs players up for the weekly game (the game's app and chat, the personhood product) runs the same steps and gives the same answers.
+
+  - `registerForGame(chain, capabilities, options)` reads the seat, binds the lite alias when the free route needs it, decides the prize-draw entries at the best block, then hands the call, signed under the origin its route needs, to a `submit` capability. Registration is judged by the chain's clock, and the sign-up resolves at the best block unless `waitFor: "finalized"` is asked for. The draws never block the sign-up: a draw that is not open yet, or a read that fails, costs the tickets, and the outcome says why. An abort before the broadcast sends nothing.
+  - Every outcome, and every `GameRegistrationError`, carries a report and names the step that failed and whether a retry can help; `registrationRetryDelay` gives the backoff. A declined signature is never asked for again. A failure's `code` is always a name (the chain's error name, or one of `GameRegistrationOwnCode` such as `Timeout`, `Network` or `HostRefused`), never free text; what the error said is in `message` and `cause`.
+  - `readGameSeat` and the pure `deriveSeat` give the route (`returning`, `free`, `deposit` or `unfunded`), so every product shows the same answer.
+  - `bindGameSeat` runs the bind on its own: a current binding and a bind that cannot succeed ask for no proof, the `Game.LiteInvites` pin is checked before it goes out, and a bind no block holds within `timeoutMs` fails with `landingUnknown`.
+  - `GAME_PRODUCT_NAME`, `GAME_ACCOUNT_INDEX` and `gameProductId` name the game account in one place.
+  - The new `@parity/product-sdk-individuality/host` entry builds the capabilities from a host with `hostGameRegistrationCapabilities({ tld, accountIndex? })`, submitting through `@parity/product-sdk-tx`; `accountIndex` defaults to `GAME_ACCOUNT_INDEX`. It finds the personhood keys by chain and collection id, whatever pallet index the host lists them under, so no index is hard-coded. The main entry imports neither. The umbrella reaches it as `@parity/product-sdk/individuality/host`.
+
+- 45dc779: Add `getApprovedCollections(network)`, the collections apps offer for claims on a network, as plain ids. Any owner can register a collection for claims, so which ones to offer players is a product decision, now kept in one place instead of in each app.
+
+### Patch Changes
+
+- 45dc779: A host call that rejects now answers PAPI with a JSON-RPC error. truapi
+  rejects a call on a timeout, a closed transport or an abort, and the chain
+  provider answered only from the two arms of `.match`, which a rejection never
+  reaches. A timed-out `chainHead_v1_storage`, `chainHead_v1_call` or
+  `chainHead_v1_unpin` therefore stayed unsettled for good, and a best-block
+  watch that waited on it stopped with no error.
+
+  The provider now answers through the new `matchHostResult`, which runs on the
+  same `matchGuarded` path as `unwrapHostResult` and `mapHostResult`. A
+  rejection reaches the error arm as a `HostResponseDecodeError`.
+
+- 45dc779: Pace the stop the PAPI provider synthesizes when a host follow stream is
+  interrupted. polkadot-api refollows on a stop at once, so while the host's
+  chain connection is down every interrupt used to turn into an immediate new
+  follow, in a tight loop. The synthetic stop now waits 250 ms, doubling to a
+  4 s cap, and the delay resets when a follow delivers `Initialized`. A genuine
+  `Stop` item from the host is still forwarded at once. Unfollow and disconnect
+  cancel a pending stop, and a disconnected provider ignores further requests.
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+  - @parity/product-sdk-host@0.28.0
+  - @parity/product-sdk-individuality@0.11.0
+  - @parity/product-sdk-nfts@0.4.0
+  - @parity/product-sdk-chain-client@0.13.3
+  - @parity/product-sdk-cloud-storage@0.13.3
+  - @parity/product-sdk-local-storage@0.3.19
+  - @parity/product-sdk-signer@0.17.3
+  - @parity/product-sdk-keys@0.5.3
+  - @parity/product-sdk-contracts@0.11.3
+  - @parity/product-sdk-tx@0.5.3
+
+## 0.38.0
+
+### Minor Changes
+
+- c712386: Add `PeopleAirdrops` support, so any product can enter a person in the recurring People-chain prize draws (Humanity's Daily Dollar) without its own copy of the chain logic.
+
+  - `readPeopleAirdropsStanding(chain, { account })` reads every `PeopleAirdrops` draw on chain at one block and, for each, whether the account's airdrop alias is registered (through the derived slot) and has won. Other schedulers' draws in `Airdrop.Events` (the weekly game's) are skipped.
+  - `readPeopleAirdropsSigning(chain, { account })` says which `withAsPerson` origin a registration needs now: `Bound` (the account's signature is enough), `Revised` (the ring moved on, so a fresh proof for the binding's context), `Unbound` (bind with `People.set_alias_account` first), `OtherContext` or `RingUnavailable`.
+  - `peopleAirdropsRegisterCalls(chain, eventIds)` builds the `PeopleAirdrops.register` calls, chunked to the runtime's `MaxRegisterBatch` (falling back to 16), with duplicates dropped and non-`PeopleAirdrops` ids refused.
+  - `derivePeopleAirdropsSlot(eventId, salt, alias)` is the slot derivation on its own.
+
+### Patch Changes
+
+- c712386: Add `@deprecated` JSDoc markers so deprecated surface shows struck-through in editors and has a stated migration target. `host`'s `createHostLocalStorage` and `createHostPreimageManager` are identical aliases of `getHostLocalStorage`/`getPreimageManager` (single cached client); the App API's `getProductAccount`, `getAnonymousAlias` and `createProof` are sync stubs that return `null` or throw and should be reached through `SignerManager` directly. Documentation only; no runtime change.
+- c712386: Fix the `@module` label on the `@parity/product-sdk/cloud-storage` re-export barrel, which read `@parity/product-sdk/bulletin` from a copy-paste. Documentation only; no runtime change.
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+  - @parity/product-sdk-contracts@0.11.2
+  - @parity/product-sdk-address@0.3.1
+  - @parity/product-sdk-keys@0.5.2
+  - @parity/product-sdk-host@0.27.1
+  - @parity/product-sdk-individuality@0.10.0
+  - @parity/product-sdk-signer@0.17.2
+  - @parity/product-sdk-tx@0.5.2
+  - @parity/product-sdk-chain-client@0.13.2
+  - @parity/product-sdk-cloud-storage@0.13.2
+  - @parity/product-sdk-local-storage@0.3.18
+
+## 0.37.0
+
+### Minor Changes
+
+- d076015: `ChatManager.sendMessage` takes an optional `{ alt }`, one line describing the message that a host shows where it lists the message rather than draws it, such as the chat list preview of a custom card.
+
+### Patch Changes
+
+- Updated dependencies [d076015]
+- Updated dependencies [d076015]
+  - @parity/product-sdk-host@0.27.0
+  - @parity/product-sdk-cloud-storage@0.13.1
+  - @parity/product-sdk-chain-client@0.13.1
+  - @parity/product-sdk-local-storage@0.3.17
+  - @parity/product-sdk-signer@0.17.1
+  - @parity/product-sdk-keys@0.5.1
+  - @parity/product-sdk-contracts@0.11.1
+  - @parity/product-sdk-tx@0.5.1
+
+## 0.36.0
+
+### Minor Changes
+
+- dde3b0d: Re-pin `paseo-individuality` and `previewnet-individuality` to the People runtime now live on both chains (`next-people-paseo` 3004000, code hash `0x69e7126f…7871`). The genesis hashes are unchanged.
+
+  What moved in the pallets products read: `Airdrop.EventInfo` gained `product_name` (so `Airdrop.Events` and `schedule_event` changed shape, with a new `InvalidProductName` error); `Game` gained the `product_name` constant and a `CreditCapacityExhausted` error; `Members` gained `RetiredIdentifiers` and `IdentifierRetired`; `NftCredits` keys awards by `(block, index)` with expiry sweeps and its runtime API arguments are named `tree_block`; the `SkipFeelessPayment` pallet is gone; `AuthorizedAliasersApi` and `TrustedQueryApi` were added. `PeopleLite`, `People`, `Score`, `Coinage` and `PeopleAirdrops` are unchanged in shape.
+
+  The runtime also declares two transaction-extension pipelines now, version 0 (plain, what a signed V4 extrinsic uses) and version 1 (the origin extensions); `@parity/product-sdk-individuality` reads the right one from this release on.
+
+- dde3b0d: Remove the legacy novasama native-chat backend from `getChatManager()`. The `@parity/product-sdk-host` chat path now resolves only through the truapi host; the fallback that loaded `@novasamatech/host-api-wrapper` when running inside the legacy iOS `__container__` WebView is gone, along with the dependency. `getChatManager()` returns `null` on a host with no truapi client instead of bridging to the native backend. Products running under a truapi host are unaffected (that branch was never reached there).
+- dde3b0d: **Person-origin signing follows the pipeline the hosts encode, and the game's prize draws are open to recognized players.** Both are People runtime 3004000.
+
+  The runtime now declares two transaction-extension pipelines: version 0, the plain one a signed V4 extrinsic rides, and version 1, which carries `AsPerson`, `ScoreAsParticipant`, `PeopleLiteAuth` and the rest of the origin extensions. `readExtensionPipeline` used to refuse any blob that declared more than one version, so every `withAsPerson`, `withScoreParticipant`, `withLiteAlias` and `buildLiteAliasBindTx` call threw against the live chains. It now reads the highest declared version, the rule the Rust host core encodes with, and the signer wrappers fill the slots PAPI 2.x leaves out (it only knows version 0) with the chain's own defaults before hashing the implication. The pinned lite-bind extrinsic opens with extension version 1 and carries `CheckMetadataHash`.
+
+  `AirdropVrfs::Alias` is buildable: the chain verifies each draw proof in the product context `product/<product_name>.<tld>/<event_id>` (`Game.product_name` is `dim2`), which is what a host mints for `createRingVRFProof(peopleKey, { productId, suffix: Raw(eventId) }, peopleRing(genesis), message)`. New `mintAliasAirdropVrfs(signer, { eventIds, registrant, productId })` returns `{ proofs, ringIndex, revision }`, signing the registration entry (`1u8 ++ account_id` or `0u8 ++ alias`), checking the returned context against the one derived offline, and refusing proofs that disagree on the ring revision. `signUpWithAccountTx` and `signUpWithLiteInviteTx` take that value in `airdrops` beside the account VRFs.
+
+  Breaking: the `AliasVrfsUnavailable` blocker is gone. A recognized player now reads `canEnterDraws: true` with `variant: "Alias"`; whether the calling product may use the People member key is the host's grant decision and surfaces from the mint, not from the requirement read. `NotSr25519` applies to the `Account` variant only.
+
+- dde3b0d: **Moves the SDK to polkadot-api 3.** Breaking for every caller that signs.
+
+  PAPI 3 replaced the `PolkadotSigner` with a `TxCreator`, which receives one payload holding the call, every transaction extension, the pipeline version those extensions belong to, and the runtime metadata. Every signer the SDK builds or accepts is now a `CommonSignerTxCreator` from `@polkadot-api/signers-common`: `getProductAccountSigner` and `getLegacyAccountSigner` in host, `SignerManager.getSigner`, `seedToAccount` and the key manager in keys, `createDevSigner` in tx, the session, slot-account and allowance signers in terminal, and the signers `resolveSigner` returns in auth. `submitAndWatch`, `batchSubmitAndWatch` and contract calls take it unchanged. A PAPI transaction is now submitted with `createSubmitAndWatch` or `createAndSubmit`, fees are estimated with a creator such as `getFakeTxCreator(address)`, and the transaction events `signed` and `txBestBlocksState` are now `created`, `inBestBlock` and `notInBestBlock`. The `TxEvent` type in tx follows.
+
+  `withAsPerson`, `withLiteAlias` and `withScoreParticipant` now wrap a `TxCreator`. They fill the standard extensions with the PAPI 3 enhancers, write their origin extension, and hand the inner signer the pipeline version that carries it, so the host is told the version the proof was built for instead of inferring one. This replaces the slot filling that worked around PAPI 2 only knowing pipeline version 0. A fee estimate through a wrapper is priced as a plain account transaction and never requests a proof.
+
+  Host exports `createHostTxCreator`, also published as the transport-free subpath `@parity/product-sdk-host/tx-creator`, which terminal uses for the paired-phone signer. The `txExtVersion` signer option is now the version used when the transaction names none.
+
+  Terminal moves to `@novasamatech/host-papp`, `statement-store` and `storage-adapter` 0.12.0, and host to `@novasamatech/host-api-wrapper` 0.12.0, the releases built for PAPI 3. `@novasamatech/statement-store` 0.12.0 still depends on `@novasamatech/sdk-statement` 0.6.0, which pulls a private copy of polkadot-api 2 into the install. The descriptors are regenerated with the PAPI 3 CLI.
+
+  Cloud Storage keeps working with `@parity/bulletin-sdk` 0.3.0 through a shim that maps its `signSubmitAndWatch` onto `createSubmitAndWatch`, to be removed when a PAPI 3 build ships.
+
+  The `paseo-asset-hub` and `previewnet-asset-hub` descriptors follow `next-asset-hub-paseo` 3004000, and `previewnet-asset-hub` takes the new genesis of the reset Previewnet Asset Hub. That runtime drops the `Result` wrapper from `ScarcityApi.metadata_batch` and `NftClaimsApi.preview_mints`, which now return their list directly and reject an oversized batch at decode (128 queries for `metadata_batch`, 32 for `preview_mints` on `next-asset-hub-paseo` 3004000). `NftsChain` and `NftsInstancesChain` follow, so a hand-built chain answers those calls with a bare list. `getInstanceDisplays` no longer re-chunks on a `TooLarge` refusal, and `previewClaim` sends one `preview_mints` call per 32 collections, the bound the runtime enforces.
+
+  Every nfts read now holds the blocks it pins until it settles, through the optional `hodlBlock` that `BlockSource` gains and a PAPI client already has. A finalized block was unpinned as soon as a newer one was finalized, so a read that spanned that moment failed inside a container with "is not pinned", because the host serves no archive methods to fall back to.
+
+- dde3b0d: **Pair with a truapi 0.25.0 host.** `@parity/truapi` moves from `^0.24.0` to `^0.25.0`. The codec version stays at 3, but `TRUAPI_WIRE_SCHEMA_HASH` moves from `c130fa60ef495768` to `3c45e49b26c1ab97`, so the schema a product speaks no longer matches a host still on 0.24.0. Every host surface has to move in the same window.
+
+### Patch Changes
+
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+  - @parity/product-sdk-host@0.26.0
+  - @parity/product-sdk-individuality@0.9.0
+  - @parity/product-sdk-logger@0.1.2
+  - @parity/product-sdk-address@0.3.0
+  - @parity/product-sdk-chain-client@0.13.0
+  - @parity/product-sdk-cloud-storage@0.13.0
+  - @parity/product-sdk-contracts@0.11.0
+  - @parity/product-sdk-keys@0.5.0
+  - @parity/product-sdk-nfts@0.3.0
+  - @parity/product-sdk-signer@0.17.0
+  - @parity/product-sdk-tx@0.5.0
+  - @parity/product-sdk-renderer@0.7.0
+  - @parity/product-sdk-local-storage@0.3.16
+
+## 0.35.0
+
+### Minor Changes
+
+- 133451f: Let a read address its block the way PAPI's `at` does. `readSignUpFunds`,
+  `readGameSignUpRequirement`, `readLiteSignUpRequirement` and `readAirdropDraw`
+  take `at: "finalized" | "best" | BlockSnapshot`. Every nfts read that took a
+  snapshot as `at` takes the same, and `getClaims` also takes it as
+  `individualityAt` for its People read. `"finalized"` stays the default.
+
+  The raw clients these reads take, `raw.individuality` and `raw.assetHub`, are
+  now `BlockSource`, the part of PAPI's `PolkadotClient` they use, so they name
+  `getBestBlocks` next to `getFinalizedBlock`. Every `PolkadotClient` has both, so `fromPapi` and
+  `getChainAPI` callers change nothing. A hand-built raw client needs
+  `getBestBlocks` added. `FinalizedBlockSource` stays as a deprecated alias.
+  `BlockSnapshot` names the pinned block, and `FinalizedSnapshot` stays as an
+  alias of it.
+
+- 133451f: `getInstanceDisplays(chain, instances)` reads the display metadata of minted
+  NFTs by instance id: `name`, `collectionName`, `rarity`, `imageRef`, the full
+  three-layer `attributes` bag, the (collection, item) each instance was minted
+  from as the runtime resolves it, and `transferability`, `supply` and
+  `liveSupply` from its item definition.
+
+  `name` is the instance's own — its instance layer, else its item layer — and
+  does **not** inherit the collection's, which is reported beside it as
+  `collectionName`. Inheriting is right for `image` and `rarity`, where the
+  collection sets a default for its items, and wrong for `name`, where the
+  collection layer holds the name of a different thing. A deployment that names
+  its collection and titles items by `archetype` would otherwise see every item
+  wearing the collection's name. This differs from `CollectionItem.name`, which
+  merges the two; that read shipped first and this is the shape both should
+  have. Positional like `previewClaim`, with a per-instance `Found` /
+  `NotFound` tag — an unminted or burned instance is a clean miss on the `ok`
+  channel, and an instance with no metadata at all (every claim-minted one
+  today) is still `Found`. `getInstanceDisplay` is the same read for one id.
+
+  The read takes its own chain contract, `NftsInstancesChain`: the runtime API
+  `api.ScarcityApi.metadata_batch` and `query.Scarcity.ItemDefs`, both of which
+  a pruned descriptor whitelist must carry, plus the raw client. A `getChainAPI`
+  client satisfies it whole.
+
+  The read is capped at `MAX_INSTANCES_PER_READ` (128) instances per call and
+  refuses above it rather than paging: every other read here walks a space the
+  chain sizes, while this one answers a list the caller already holds, so a
+  cursor would page someone over their own input. The cap is the package's
+  contract rather than a reading of the chain, though it coincides with the live
+  runtime's `metadata_batch` cap, so a full read is one runtime call there and a
+  deployment configured lower reports its own cap for the read to re-chunk to.
+  The definitions are then one keyed read over the deduplicated
+  `(collection, item)` pairs, so they cost one serial hop and nothing per
+  instance. The three definition-backed fields are `null` together, and only
+  when the definition is gone from under a live instance.
+
+  `NftsIdError` now also reports out-of-range `u64` instance ids; its `id` field
+  widened from `number` to `number | bigint`. The constructor shape is unchanged
+  (`(id, options?)`): which space the id missed follows from the value's type.
+
+  `getCollectionItems` now refuses an item definition carrying a transferability
+  variant this package does not know with an `NftsDecodeError`, instead of
+  passing the unknown string through a field typed as the `Transferability`
+  union. It is the same refusal `getInstanceDisplays` makes, through the one
+  shared decoder. This is a behavior change for consumers: the two variants the
+  runtime has today still read as before, but a future third variant now fails
+  the read on the `err` channel where it previously reached callers as an
+  untyped string, so a consumer wanting to tolerate an unknown variant must
+  handle the `NftsDecodeError`.
+
+- 133451f: `@parity/product-sdk-react-renderer` now covers the whole renderer vocabulary. The new `Image` and `Effect` components complete the eleven node types, and `opacity` and `blendingMode` complete the twelve modifiers every widget accepts.
+
+  Serialization no longer emits fields the protocol does not declare on a node. `Spacer`, `TextField` and `Image` are sent without `children`, and `Effect` without `modifiers`; before this, a card of any size produced a run of `unknown-field` warnings that a host silently ignored.
+
+  `createRenderer` takes a new `validate` option: a checker to run over every tree before it reaches `onRender`, reporting each issue to the console with its path. Pass `validateFace` from `@parity/product-sdk-renderer`. It is injected rather than imported so that a bundle which never asks for checking does not carry the checker, which an eager import could not be shaken out of. It never throws, because an exception inside the reconciler's commit would leave React half applied.
+
+  `drawPocketCard` joins a Pocket card to a React tree. It takes the manager structurally, so neither package depends on the other, and it does the adapting between the two action shapes: the host reports a press as hex, the renderer wants bytes, and a press that carried nothing arrives as no payload rather than an empty array. The card is then a component with state, so a press is `onClick` and React streams the next face.
+
+  `@parity/product-sdk-renderer` exports its vocabulary tables, `NODE_SCHEMA` and `MODIFIER_SCHEMA`, so a consumer can hold its own coverage against the protocol. The React renderer's own completeness test does exactly that.
+
+### Patch Changes
+
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+  - @parity/product-sdk-individuality@0.8.0
+  - @parity/product-sdk-nfts@0.2.0
+  - @parity/product-sdk-renderer@0.6.0
+  - @parity/product-sdk-signer@0.16.2
+  - @parity/product-sdk-contracts@0.10.14
+
+## 0.34.0
+
+### Minor Changes
+
+- a1e1f72: **Pair with a truapi 0.24.0 host.** `@parity/truapi` moves from `^0.23.0` to `^0.24.0`. The codec version stays at 3, but `TRUAPI_WIRE_SCHEMA_HASH` moves from `ea1a1441ff0219b1` to `c130fa60ef495768`, so the schema a product speaks no longer matches a host still on 0.23.0. Every host surface has to move in the same window.
+
+### Patch Changes
+
+- Updated dependencies [a1e1f72]
+  - @parity/product-sdk-host@0.25.0
+  - @parity/product-sdk-renderer@0.5.0
+  - @parity/product-sdk-chain-client@0.12.10
+  - @parity/product-sdk-cloud-storage@0.12.6
+  - @parity/product-sdk-local-storage@0.3.15
+  - @parity/product-sdk-signer@0.16.1
+  - @parity/product-sdk-keys@0.4.3
+  - @parity/product-sdk-contracts@0.10.13
+  - @parity/product-sdk-tx@0.4.13
+
+## 0.33.0
+
+### Minor Changes
+
+- df6b2c0: Add a native-backend chat adapter so chat products keep working on the legacy
+  native container during the truapi transition. `getChatManager()` now prefers
+  the truapi host and, when there is no truapi host, falls back to the native
+  backend when `isNativeChatHost()` detects it. The novasama wrapper is loaded via
+  a dynamic `import()` so truapi-only products never bundle it.
+- df6b2c0: **Pair with a truapi 0.23.0 host.** `@parity/truapi` moves from `^0.20.0` to `^0.23.0`. The codec version stays at 3, but `TRUAPI_WIRE_SCHEMA_HASH` moves from `462dacb6e0d1f504` to `ea1a1441ff0219b1`, so the schema a product speaks no longer matches a host still on 0.20.0. Every host surface has to move in the same window.
+
+  **Surface changes carried through `@parity/product-sdk-host`.** truapi 0.23 adds a `contacts` domain (a `getTruApi().contacts.pick` picker; modeled as not-supported by the testing fake, and product-account transactions now send an empty `contacts` list). It also dropped four type aliases the host re-exported, replaced by the primitives they always were, so no runtime change: `NotificationId` and `CoinPaymentPurseId` are `number`, payment `Balance` is `bigint`, and a statement `Topic` is a `` `0x${string}` `` hex. The `NotificationId` and `Topic` names stay exported from this package as local aliases, so importers are unaffected.
+
+- df6b2c0: Host and terminal signer factories accept an optional `txExtVersion`, defaulting to `0`. It names the transaction extension version used to encode the supplied extensions; the host or paired wallet chooses V4 or V5 from it and the runtime metadata. Setting another version forwards it unchanged without re-encoding the extension bytes.
+
+### Patch Changes
+
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+  - @parity/product-sdk-host@0.24.0
+  - @parity/product-sdk-renderer@0.4.0
+  - @parity/product-sdk-signer@0.16.0
+  - @parity/product-sdk-chain-client@0.12.9
+  - @parity/product-sdk-cloud-storage@0.12.5
+  - @parity/product-sdk-local-storage@0.3.14
+  - @parity/product-sdk-contracts@0.10.12
+  - @parity/product-sdk-keys@0.4.2
+  - @parity/product-sdk-tx@0.4.12
+
+## 0.32.0
+
+### Minor Changes
+
+- 41d7ee8: **Re-pin the Paseo Asset Hub and Paseo individuality descriptors against the live 3003000 runtimes.**
+
+  Both chains upgraded, so the bundled metadata no longer matched them. The genesis hashes are
+  unchanged, so connections keep working. What changed is what the descriptors can decode.
+
+  Two changes break direct descriptor users, and neither affects a caller that goes through
+  `@parity/product-sdk-nfts`, which was updated in the same release.
+
+  `NftCredits.NftClaimCreditAwards` on the People chain is now keyed `(block, chunk)` rather than
+  by block, with at most `CHUNKS_PER_TREE` chunks a block. A read by block alone no longer
+  compiles.
+
+  `NftClaims.ClaimedCredits` on Asset Hub is gone. Its replacement is `NftClaims.ClaimedLeaves`,
+  one bitmap per tree block with bit `leaf_index` set for each claimed leaf, least significant bit
+  first. The bitmap outlives the tree, so a claim still reads as claimed after the tree is swept.
+
+  New in the Asset Hub descriptor and read by the nfts package: `NftClaimsApi.preview_mints`.
+
+- 41d7ee8: **Hash an NFT claim credit offline: `creditHash`.**
+
+  `creditHash({ gameIndex, round, attester, attestee })` returns the credit one attestation awards, the preimage the game pallet hashes, pinned against the two vectors of the pallet `nft_claim_credit_spec` test. `readCreditCandidates` uses it to name the credits a player could earn.
+
+  Reading the claims the chain has awarded, with the proof a mint needs, belongs to `@parity/product-sdk-nfts`, see #329.
+
+- 41d7ee8: **Re-pin `paseo-individuality` and `previewnet-individuality` to spec 3003000 (#242).**
+
+  Both chains now pin codeHash `0x90d0e268…43744`. Previewnet was also re-genesised, from `0xf720c28f…35218` to `0x55e3e689…249e9`, so the previous descriptor fails to connect to it with `GenesisMismatchError`. Paseo keeps genesis `0x4a2b5b73…5ad48`.
+
+  **Minor rather than patch, because surface is removed.** Both chains changed the same way.
+
+  | Kind      | Removed                                                                                                                                                                                                                          | Added                                                                                                                                                           |
+  | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Storage   | `NftCredits.NftClaimCreditAwardBlocks`, `NftCredits.PendingNftClaimCreditRootInfo`                                                                                                                                               | `NftCredits.CreditBuffers`, `NftCredits.CreditBufferCursor`, `NftCredits.RetainedCreditTreeBlocks`, `NftCredits.RootExpiries`, `Coinage.RecyclersUnloadedCount` |
+  | Constants | `NftCredits.MaxCreditsPerBlock`, `NftCredits.MaxRetainedAwardBlocks`, `Coinage.MaxFreeUnloadTokensPerTimePeriod`, `Coinage.UnloadTokenAllowancePerTimePeriodForLitePeople`, `Coinage.UnloadTokenAllowancePerTimePeriodForPeople` | `NftCredits.ClaimsChainTreeTtl`, `NftCredits.MaxRetainedCreditTrees`, `NftCredits.MaxRootsPerSweep`, `NftCredits.MaxTreeDeletionsPerMessage`                    |
+  | Calls     | none                                                                                                                                                                                                                             | `NftCredits.receive_tree_deletions`, `NftCredits.sweep_expired_roots`, `Score.force_set_attendance`                                                             |
+
+  `NftCredits.NftClaimCreditAwards` keeps its name but is now keyed by block and chunk index rather than by block alone, so a read written against the old key no longer typechecks. The `NftCreditsApi` runtime APIs answer the same questions and also serve the Merkle proof a claim needs.
+
+  `@parity/product-sdk-chain-client` needs no entry. It reads `.genesis` off the imported descriptor, so only its in-source test restated the previewnet hash.
+
+- 41d7ee8: **Mint airdrop VRFs without a host: `localAirdropVrfSigner` in a new `testing` subpath.**
+
+  `localAirdropVrfSigner(secretKey)` from `@parity/product-sdk-individuality/testing` is an `AirdropVrfSigner` over an sr25519 secret key held in memory, so a script can call `mintAccountAirdropVrfs` and sign up for the game with no host. It signs the transcript the airdrop pallet verifies, which `vrf.sign` from `@scure/sr25519` cannot express, and refuses a transcript whose `signer` item names another key. Its signatures are pinned against the VRF of `@scure/sr25519` on the one transcript both can express.
+
+  It is for development only and never ships from the main entry. A hosted product keeps signing through the host. `@parity/product-sdk/testing` re-exports it.
+
+  The package now depends on `@noble/curves` and `@scure/sr25519`, which only the `testing` entry imports.
+
+- 41d7ee8: **Build the game report and offboard calls: `reportTx` and `offboardTx`.**
+
+  `reportTx(chain, { fullReport })` builds `Game.report` from `"Person" | "NotPerson"` votes, one list per round in group order with the reporter left out. `offboardTx(chain)` builds `Game.offboard`. Both return the unsigned PAPI transaction, like `claimPrizeTx`, so submission stays with `@parity/product-sdk-tx`.
+
+  Sign both with `withScoreParticipant(signer)`, which dispatches them fee-free from an account with no balance. The `signUpWithAccountTx` docs now say the same origin serves a returning player signing up again.
+
+  Offboarding a `Recognized` player suspends their personhood permanently, which the `offboardTx` docs spell out.
+
+- 41d7ee8: **Expose the participant record behind a resolved personhood state.**
+
+  The `Resolved` arm of `PersonhoodResult` now carries `participant`, the decoded `Score.Participants` record the state was derived from, or `null` when the account has none. It holds the fields the state and the metrics summarize away: the streak, the attendance history, the recognition, `lastAttendedGame` and whether personhood was reached, so a product no longer reads the entry a second time to get them.
+
+  `PersonhoodParticipant` also gains `hasEverReachedPersonhood`, which stays `true` after the score falls back below the threshold, decoded from the new `has_ever_reached_personhood` member of `RawParticipant`.
+
+  **Breaking for implementors.** `participant` is a required member of the `Resolved` arm, `hasEverReachedPersonhood` of `PersonhoodParticipant`, and `has_ever_reached_personhood` of `RawParticipant`, so hand-built values and test doubles must add them. Callers are unaffected, and values decoded by `toPersonhoodParticipant` from a real `Score.Participants` read already carry them.
+
+- 41d7ee8: **Read the roster of the running game: player indices, group members, communication identifiers and credit candidates.**
+
+  - `readPlayerIndices(chain, { player })` reads `Game.PlayerToIndex`, one index per round.
+  - `readGroupMembers(chain, { round, ownIndex, playerCount, maxGroupSize })` resolves every occupied seat of one group through `Game.IndexToPlayer`.
+  - `readCommunicationIdentifier(chain, { account })` reads the 65-byte key an account registered at sign-up from `Game.CommunicationIdentifiers`.
+  - `readCreditCandidates(chain, { attestee })` reads the game and the roster at one block and names every credit the attestee could earn, one per co-player per round, hashed with `creditHash`. Matching them against the claims `@parity/product-sdk-nfts` reads, see #329, separates the awarded credits from the pending ones.
+  - `numberOfGroups` and `groupSeats` are the pure group arithmetic of the pallet, empty seats included.
+
+  The roster exists from the end of the shuffle until `PlayerProcess::Step2ClearIndices` drains it, so `CurrentGame` now carries `playerCount`, read from the game state, which is `null` outside that window. Read the game first, and cache the candidates if they have to outlive it.
+
+  **Breaking for implementors.** `playerCount` is a required member of the exported `CurrentGame` interface, so hand-built values and test doubles must add it. Callers are unaffected.
+
+- 41d7ee8: **Read what a game sign-up costs: `readSignUpFunds`.**
+
+  `readSignUpFunds(chain, { account, tx })` returns the parts of the cost at one pinned finalized block: `deposit` from `Game.PlayDepositAmount`, the free balance from `System.Account`, and `estimatedFee` for the sign-up transaction passed as `tx`, or `null` without one. It also returns the token `decimals` and `symbol` the chain spec publishes, `null` where it publishes none. How much headroom to demand on top is product policy, so no total is given.
+
+  The deposit applies to a new or archived player only, and the fee is refunded on success but needed up front. Neither applies under `withScoreParticipant`.
+
+  The estimate passes `VerifyMultiSignature` as `Disabled`. Estimating a sign-up on the individuality chains with plain `getEstimatedFees` fails with `Missing VerifyMultiSignature signed extension`, because the host fills that extension when it signs.
+
+- 41d7ee8: **Watch the game, a registration and a participant record at the best block.**
+
+  - `watchCurrentGame(chain, onValue, onError)` follows `Game.Game`, decoded by `toCurrentGame`, and is `null` between games.
+  - `watchPlayer(chain, { player }, onValue, onError)` follows `Game.Players`, and is `null` for a player with no record.
+  - `watchParticipant(chain, { player }, onValue, onError)` follows `Score.Participants`, decoded by `toPersonhoodParticipant`.
+
+  Each returns the function that stops it, and passes the best block the value was read at. A value that fails to decode goes to `onError` and the watch keeps running, while a failed subscription goes to `onError` as a `ProductIndividualityError` and ends. PAPI emits once per best block whether or not the value changed, so a watch only delivers a value that differs from the last.
+
+  The contracts are `CurrentGameWatchChain`, `PlayerWatchChain` and `ParticipantWatchChain`, which a client from `getChainAPI` or `fromPapi` satisfies as it is.
+
+- 41d7ee8: **`getVerifiedArtwork(imageRef, { source })`: the bytes an image reference names, only when they hash to it.**
+
+  An `ImageRef` is a content address, an ASCII CID or a bare 32-byte digest, and neither is the
+  bytes. Wherever the bytes come from, they are only the artwork if they hash to the digest the chain
+  committed to. This read decodes the reference into an address, asks a caller-supplied source for the
+  bytes, hashes them the way the multihash says, blake2b-256 or sha2-256, and answers `Verified` with
+  the bytes only when the digests match.
+
+  ```ts
+  const art = await getVerifiedArtwork(item.imageRef, {
+    source: preimageSource(manager),
+  });
+  // -> ok({ tag: "Verified", address: { cid, digest, multihash }, bytes })
+  //    ok({ tag: "Missing", address })      the source had nothing
+  //    ok({ tag: "Mismatch", address })     the source lied, and the bytes are withheld
+  //    ok({ tag: "Unreadable" })            no address, or a multihash it cannot check
+  ```
+
+  Two sources ship. `preimageSource(manager)` reads the host preimage manager by digest, which on
+  Bulletin is the preimage key, so no CID round trip is needed. `gatewaySource(baseUrl)` reads an IPFS
+  gateway by CID. Both are typed structurally, so this package depends on neither the host package nor
+  a fetch implementation, and a test or a cache can stand in for either.
+
+  `artworkAddress(imageRef)` is exported on its own for a caller that only wants the CID, for example
+  to build a gateway URL for an `<img>` it is willing to trust.
+
+- 41d7ee8: **`getClaims(chain, { claimant })`: every NFT claim credit one claimant holds, with where each stands.**
+
+  A credit is awarded on the People chain and spent on Asset Hub, so this is the first read here that
+  spans two chains. It takes `NftsChain & NftsCreditsChain`, the new contract for the People side plus
+  the two `NftClaims` entries on Asset Hub, and a client from `getChainAPI(...)` satisfies both at
+  once. Two blocks are pinned, one per chain, and both come back in `at`.
+
+  ```ts
+  const result = await getClaims(chain, {
+    claimant: { tag: "Account", address },
+  });
+  // -> { at: { individuality, assetHub }, claims: [{ hash, awardBlock, awardedAt, gameIndex, leafIndex, proof, state }] }
+  ```
+
+  `state` is one of four. `earned` means the award block has no root on Asset Hub yet, so a claim
+  would be refused. `claimable` means the root arrived and the leaf is unspent. `claimed` means the
+  leaf is spent, and a claim made before Asset Hub swept the tree still reads as claimed after it.
+  `unprovable` means the awards of the block are gone, pruned or expired, so the block counted but its
+  credit count and hashes went with the awards. That case is one entry per block with `hash: null`,
+  reported rather than dropped, because a shelf that silently loses old credits is worse than one that
+  says why. An `earned` entry with `hash: null` is a block still to come. Proof errors that are
+  integrity failures, `RootMismatch`, `LeafCountMismatch` and `LeafIndexOutOfBounds`, land on the `err`
+  channel.
+
+  Each claim carries the Merkle `proof` a mint spends, the sibling hashes from its leaf up to the
+  root, so a later mint needs no second read. It is `null` for a block with no root yet and for an
+  unprovable one.
+
+  A claimant is `{ tag: "Account", address }` or `{ tag: "Person", alias }`. The pallet keys the two
+  apart and nothing links them, so a player who moved from account to alias has to be read twice.
+
+  Six new descriptor entries for apps that prune their own: `NftCredits.NftClaimCreditBlocks`,
+  `NftCredits.NftClaimCreditAwards`, the runtime APIs `NftCreditsApi.nft_claim_credit_roots` and
+  `nft_claim_credit_proofs` on the People chain, and `NftClaims.CreditTrees` and
+  `NftClaims.ClaimedLeaves` on Asset Hub.
+
+- 41d7ee8: **New package `@parity/product-sdk-nfts`: read Scarcity collections and item catalogues.**
+
+  **Every read is paged, and `limit` omitted does not mean "everything".** It defaults to
+  `DEFAULT_PAGE_LIMIT` (100) and caps at `MAX_PAGE_LIMIT` (1000), both exported. Nothing bounds how
+  many collections exist or how many items a collection holds. The only ceilings the pallet has are
+  index-space exhaustion, and the indices are `u32`. So a read whose default is "everything" is a
+  read that works until a deployment grows and then breaks a browser tab. All three take `limit` and
+  `fromId` and report `idCeiling` and `nextId`, so one pager works against any of them, and
+  `nextId === null` is the only end signal.
+
+  Three reads, all pure catalogue, with no identity, no purse and no second chain:
+
+  ```ts
+  import {
+    getClaimableCollections,
+    getCollections,
+    getCollectionItems,
+  } from "@parity/product-sdk-nfts";
+
+  const registry = await getClaimableCollections(chain, { limit: 100 });
+  // -> [{ id: 0, name: "One and only ", selection: { tag: "Random" }, itemCount: 1, owner }]
+
+  const browsing = await getCollections(chain, { limit: 100 });
+  // -> [{ id: 0, name: "One and only ", itemCount: 1, owner, selection: { tag: "Random" } },
+  //     { id: 1, name: "Unregistered",  itemCount: 0, owner, selection: null }]
+
+  const catalogue = await getCollectionItems(chain, 0, { limit: 100 });
+  // -> { tag: "Found", collection: { items: [{ index, supply, liveSupply, name, imageRef, rarity, attributes }] } }
+  ```
+
+  **There is one kind of collection, and two sets of it.** `Scarcity.Collections` says a collection
+  exists. `NftClaims.CollectionMinters` is the map of a second pallet, whose entry means the owner opted in
+  through `set_collection_minter`, and which records how a claim picks an item. Its keys are a subset
+  of the first map's, so `getCollections` is the superset and `getClaimableCollections` is what the
+  registry leaves of it. How much that removes is per deployment: one carries six collections and
+  registers one, another registers most of what it carries, so neither read stands in for the other.
+
+  Reach for `getClaimableCollections` in a picker. A collection with no minter entry cannot be
+  claimed into. Reach for `getCollections` to browse or audit: `selection === null` is the only
+  "exists but accepts no claims" signal, with no separate boolean to drift out of sync with it.
+  All three reads are a constant four storage reads per page, whatever the counts, and their bytes
+  scale with the page rather than with the chain. Four reads is not four round trips: PAPI's
+  `getValues` opens one storage operation per key, so the operations of a page scale with `limit` while
+  its bytes do not. Prefer the registry read whenever only claimable
+  collections belong in the answer.
+
+  **`getCollections` pages by id window.**
+
+  ```ts
+  const first = await getCollections(chain, { limit: 100 });
+  if (!first.ok) return;
+
+  let page = first.value;
+  const at = page.at; // pins the whole walk to one block
+  for (;;) {
+    render(page.collections); // 100, ascending by id
+    if (page.nextId === null) break; // the only end signal
+    const next = await getCollections(chain, {
+      limit: 100,
+      fromId: page.nextId,
+      at,
+    });
+    if (!next.ok) throw next.error; // a failed page is not the end of the walk
+    page = next.value;
+  }
+  ```
+
+  Four storage reads per page, the id ceiling plus three keyed reads over the window, whatever the
+  chain holds. Dumping the maps instead would cost roughly 15 MB at ten thousand collections, most of
+  it discarded, since the metadata dump carries every key when only `name` is wanted.
+
+  This works because the id space is knowable and dense: `create_collection` takes no id, so the
+  runtime allocates sequentially from `Scarcity.NextCollectionId`, and `delete_collection` documents
+  that identifiers are never reused. Every id is therefore readable by exact key.
+
+  **A page comes back full.** Deleted ids are holes, and the read walks past them rather than handing
+  back a short page. Ask for 100, get 100. That costs one extra record read per stretch of holes and
+  nothing else, since a hole never gets a name or registry lookup. A page is short only at the end of
+  the id space, or if a mostly-deleted range exhausts the scan budget, so **follow `nextId` rather
+  than counting**. `nextId === null` is the only end signal.
+
+  **Resuming by id is stable.** Ids are only ever appended, so paging forward cannot skip or
+  duplicate a collection even while the chain is written to, which offset-based paging over a mutable
+  set cannot promise.
+
+  **Every read now takes an `at` option**, a `FinalizedSnapshot` from the `at` of another result, joined
+  without a round trip. Separate calls otherwise pin separate blocks, which is right for unrelated
+  questions and wrong for one question asked in pages: a walk over its own snapshots is not a walk of
+  any single chain state. It is also how two reads are made to agree, so a catalogue read can address
+  the block the listing that offered the collection read at.
+
+  `CollectionsResult` gains `idCeiling` (the exclusive end of the id space, every collection ever
+  created, holes included) and `nextId`. `getClaimableCollections` takes the same `limit` / `fromId` / `nextId`, and paging it walks the same
+  id space. One difference worth knowing: the gaps its walk steps over are unregistered collections
+  rather than deleted ones, of which there can be many. At one collection in fifty registered, a page
+  of 10 returns 4 with `nextId` set. A short page is not the end, and on a registry that sparse the
+  rest of it arrives in a few more pages.
+
+  **`getClaimableCollections` no longer dumps chain-wide metadata.** It previously read names either
+  one prefix scan per registered collection, or, above sixteen of them, as one whole-map
+  `CollectionMetadata` dump carrying every key of every collection. Both are replaced by a
+  single exact-key read of exactly the rows wanted, so the read is now four reads and bytes
+  proportional to the registry at any size. `itemCount` from either listing read gives a collection's
+  size without reading its items.
+
+  The two disagree in one edge case, in opposite directions. A minter entry whose
+  `Scarcity.Collections` record is missing comes back from `getClaimableCollections` with `itemCount`
+  and `owner` `null`, and cannot appear in `getCollections`, which enumerates the records
+  themselves. `pallet_scarcity::OnCollectionDeleted` clears registrations, so it should not arise.
+
+  **`getCollectionItems` pages a catalogue the same way.** Nothing bounds the size of a
+  collection. The only item ceiling the pallet has is index-space exhaustion, `TooManyItems` reads "the
+  per-collection item index space is exhausted", and the index is a `u32`. So 10,000 items, roughly
+  70,000 metadata rows and about 14 MB in one response, is an afternoon of work for a collection owner,
+  which is why there is no read that answers with all of it.
+
+  ```ts
+  const first = await getCollectionItems(chain, id, { limit: 100 });
+  // ...then follow `nextId`, passing `at` to pin the walk to one block.
+  ```
+
+  Four reads per page whatever the collection holds: the collection record, its metadata defaults,
+  the item definitions in the window, and the metadata for those items. It works the same way the
+  collection listing does: `delete_item` documents that item indices are never reused, so a window of
+  indices is a stable page. A collection nobody created is not an error: it resolves to
+  `ok({ tag: "NotFound", … })`.
+
+  **A page carries the typed fields; `attributes` is opt-in.** `ItemMetadata` is keyed
+  `(collection, item, key)`, so keys the SDK can name, `name`, `image` and `rarity`, come back for a
+  whole window in one exact-key read. The keys of the open bag are unknowable in advance, so filling it
+  means a prefix scan of the item metadata of the whole collection. That is still one read, but bytes
+  proportional to the catalogue rather than to the page. So `attributes: true` is opt-in, and left off
+  the field is `null` rather than `{}`: an empty bag would read as "this item has no metadata", a
+  different claim from "this read did not fetch it". Collection defaults are inherited either way.
+  `CollectionItemsResult` reports `idCeiling` (every item index ever allocated) alongside `itemCount`
+  (the live definitions).
+
+  **Display metadata comes from storage.** `Scarcity.CollectionMetadata` and `ItemMetadata` are
+  merged here, with the item overriding the collection for the same key.
+
+  **Metadata is an open schema.** The pallet stores untyped `Vec<u8>` keys to `Vec<u8>` values and nothing
+  declares the keys. `name`, `image` and `rarity` are lifted into typed fields; every key is also
+  passed through in `attributes`. Values decode as UTF-8 when the bytes are readable text and as
+  `0x`-hex otherwise, and numbers are never parsed. On the live chain `energy` holds the two ASCII
+  characters `2` and `1`, so the chain stored text there rather than a binary number. `imageRef` is
+  an `ImageRef`, reporting the same bytes as `hex` and as `text` (`null` when they are not readable):
+  one deployment stores a 32-byte content digest there, another an ASCII CID, and nothing
+  declares which.
+
+  **An app that prunes its own descriptors must whitelist all six entries these reads touch**:
+  `Scarcity.NextCollectionId`, `Collections`, `ItemDefs`, `CollectionMetadata`, `ItemMetadata` and
+  `NftClaims.CollectionMinters`, including the ones its own code never reads. A missing entry fails
+  as the PAPI `Incompatible runtime entry Storage(...)`, which reads like descriptor drift. It now
+  arrives as the new `NftsChainEntryError`, naming the entry in its message, carrying it on `entry`
+  and the PAPI error as the `cause`.
+
+  Each item carries `transferability`, `Transferable` or `Soulbound`, read from the same
+  `Scarcity.ItemDefs` entry as `supply`, so it costs no extra read.
+
+  **Paseo only.** `devnet-asset-hub` carries neither pallet, which `@parity/product-sdk`'s
+  `src/nfts/contract.test.ts` pins as a negative control alongside the positive assertion that
+  the real Paseo descriptor satisfies the structural chain contract of the package.
+
+  Also exported from `@parity/product-sdk` as `@parity/product-sdk/nfts`.
+
+- 41d7ee8: **`previewClaim(chain, { credit, collections })`: what one credit would mint in each collection.**
+
+  The answer comes from `NftClaimsApi.preview_mints`, the first runtime API this package reads. It
+  runs the real claim selector without spending anything, so for a `Random` collection the preview is
+  the item the claim will produce, and switching collection is the only way to change it. One call
+  takes the whole batch and answers positionally.
+
+  ```ts
+  const preview = await previewClaim(chain, {
+    credit,
+    collections: [0, 3],
+    at: registry.value.at,
+  });
+  // -> { at, previews: [{ collection: 0, outcome: { tag: "Mints", item, via, name, rarity, imageRef } },
+  //                     { collection: 3, outcome: { tag: "Fails", reason: "NoItems" } }] }
+  ```
+
+  A collection the credit cannot mint into is a `Fails` outcome with the reason the runtime gave, not
+  an error, because the chain was asked and answered. The item that would mint is resolved through the
+  same exact-key metadata path a catalogue page uses, so `name`, `rarity` and `imageRef` agree with
+  `getCollectionItems` for the same item.
+
+  `NftsChain` gains `assetHub.apis.NftClaimsApi.preview_mints`. A client from `getChainAPI(...)`
+  satisfies it, and the fidelity guard in `@parity/product-sdk` now checks the runtime API signature
+  against the descriptor the way it checks the storage entries. A hand-rolled client has to provide it.
+
+### Patch Changes
+
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+  - @parity/product-sdk-chain-client@0.12.8
+  - @parity/product-sdk-individuality@0.7.0
+  - @parity/product-sdk-nfts@0.1.0
+  - @parity/product-sdk-cloud-storage@0.12.4
+
+## 0.31.0
+
+### Minor Changes
+
+- 206f791: **Pair with a truapi 0.20.0 host.** `@parity/truapi` moves from `^0.18.0` to `^0.20.0`. The codec version (3) and `TRUAPI_WIRE_SCHEMA_HASH` (`462dacb6e0d1f504`) are unchanged, so products and hosts on either version still talk to each other.
+
+### Patch Changes
+
+- Updated dependencies [206f791]
+  - @parity/product-sdk-host@0.23.0
+  - @parity/product-sdk-renderer@0.3.0
+  - @parity/product-sdk-chain-client@0.12.7
+  - @parity/product-sdk-cloud-storage@0.12.3
+  - @parity/product-sdk-local-storage@0.3.13
+  - @parity/product-sdk-signer@0.15.1
+  - @parity/product-sdk-keys@0.4.1
+  - @parity/product-sdk-contracts@0.10.11
+  - @parity/product-sdk-tx@0.4.11
+
+## 0.30.0
+
+### Minor Changes
+
+- a0fcb48: Resolve wallet identity from the host's `system.getProductContext()`. Derive the app name, local-storage prefix and `getAppInfo().name` by removing only the final domain suffix: `my-app.dot` uses `my-app`, preserving existing storage. Local development IDs stay unchanged.
+
+  `createApp()` works without configuration, and `ProductSDKProvider` needs no name prop. The optional `name` setting is deprecated, ignored and logged as a warning when supplied. The public fake host supplies a fixed product context for app tests.
+
+- a0fcb48: `createFakeTruApiClient` models `localStorage.subscribe`, so a product test can
+  exercise a key watcher without a real host. The fake's in-memory KV is the
+  source of truth for the stream: a subscription delivers the key's current value
+  on a microtask, then one item per later `write` or `clear` that changes the
+  stored bytes. A write of the bytes already stored, and a clear of an absent key,
+  emit nothing — the same silence the host keeps. `unsubscribe()` stops delivery.
+
+  ```ts
+  using host = createFakeHost({ localStorage: { theme: new TextEncoder().encode("dark") } });
+  host.client.localStorage
+      .subscribe({ request: { key: "theme" } })
+      .subscribe({ next: ({ value }) => render(value) });
+  ```
+
+- a0fcb48: Expose the host's temporary unwatermarked raw-signing calls on `AccountsProvider`:
+
+  ```ts
+  signRawUnwatermarkedDeprecated(account: ProductAccount, data: Uint8Array): Promise<Uint8Array>
+  signRawUnwatermarkedDeprecatedWithLegacyAccount(account: { publicKey: Uint8Array }, data: Uint8Array): Promise<Uint8Array>
+  ```
+
+  Both sign `data` with no `<Bytes>` watermark and return the raw signature bytes,
+  mirroring the `signBytes` of the two `PolkadotSigner` factories. They exist for
+  runtimes that verify a bare-byte ownership proof — People chain's
+  `Resources.register_person` `lite_identity_proof` is the one that forced them —
+  and they are deprecated on the host side too
+  ([host-rust-core#612](https://github.com/paritytech/host-rust-core/issues/612),
+  implemented in [#731](https://github.com/paritytech/host-rust-core/pull/731),
+  shipped in `@parity/truapi` 0.16.0). Hosts log a deprecation warning and show a
+  stronger confirmation prompt, since an unwatermarked signature can authorize a
+  transaction. Use `signBytes` everywhere a runtime does not force otherwise; both
+  calls disappear once the runtime accepts watermarked proofs.
+
+  **Breaking for implementors.** Both are required members of the exported
+  `AccountsProvider` interface, so alternative implementations and hand-rolled test
+  doubles must add them. Callers are unaffected. `createFakeTruApiClient` already
+  models both.
+
+- a0fcb48: Add `getPocketManager()`, for drawing the product's Pocket cards, reading its card list, hearing about
+  presses, and giving a card up.
+
+  A client has one `onRender` slot, and the renderer serves three kinds of body. So the slot is owned by a
+  small shared module that dispatches by context, and each surface claims only what it draws. Pocket claims
+  `PocketCard`, which leaves the chat and input contexts free. `getRendererManager()` claims one of those
+  for a product that draws it.
+
+  A handler that throws or rejects costs one render rather than every card the product has. A cleanup that
+  resolves after the card has left runs at once.
+
+- a0fcb48: Add `@parity/product-sdk-renderer`: a typed builder for renderer trees and `validateFace`, which checks a
+  face against the renderer protocol without a device.
+
+  The builders make the encoding traps unreachable — `padding(20, 24)` cannot omit an edge, and enum names
+  and node shapes are checked by the compiler. `validateFace` separates what the protocol forbids from what
+  it allows and you probably did not mean, and treats one host's depth, size and byte bounds as advice
+  unless you name that host.
+
+  Reachable from the umbrella as `@parity/product-sdk/renderer`.
+
+- a0fcb48: **Product accounts derive the RFC-0022 way.** The previous derivation predated RFC-0022 and matched no shipping host, so every product-account address the SDK produced was wrong. It failed closed: the wallet resolves an account selector rather than a key, so it signed as the correct account, but the wrong key drove the nonce lookup and everything else PAPI computes around the signature, and it is the address `packages/auth` displayed.
 
   A product account sits at `//product//{productId}/{derivationIndex}`. The two `//product//{productId}` junctions are **hard**. Hard junctions cannot be reproduced from a public key, so the old approach — three soft junctions from `session.rootAccountId` — could not have been right for any host. The subtree public key must come from the Account Holder.
 
@@ -27,15 +803,242 @@
 
   Requires `@novasamatech/host-papp` 0.10.0 or later for `getProductSubtree`.
 
+- a0fcb48: **`connect()` no longer reports success with no accounts after a recoverable failure.** The two branches that fetch a product account now classify failures the same way. The `productAccount` branch already degraded to an empty account list only for a non-transient rejection and returned anything else for the retry loop; the `dappName` branch — the one a default `SignerManager` takes — degraded on _any_ failure, so a timeout was indistinguishable from an unregistered identifier and `connect()` resolved `ok([])` with nothing to prompt another attempt. Both now share one classifier.
+
+  **`NotConnected` is retried before it degrades.** The host returns that tag both for a signed-out user and for a session that is being re-established — after a host account switch, the core re-mints it, and a product account queried in that window is refused. The two are indistinguishable, so the tag is now retried and degrades to read-only only once the attempts are spent. A signed-out user reaches the same empty-accounts state as before, a retry cycle later; an in-flight re-mint recovers instead of leaving the product connected with no accounts.
+
+  Consumers passing `dappName` who relied on `connect()` always resolving should note it can now return an error for an unclassified host failure, after `maxRetries` attempts.
+
+- a0fcb48: **Pair with a truapi 0.18 host.** `@parity/truapi` moves from `^0.17.0` to `^0.18.0`. `TRUAPI_CODEC_VERSION` moves from 2 to 3 and `TRUAPI_WIRE_SCHEMA_HASH` from `50637d83426acd22` to `462dacb6e0d1f504`. The handshake compares codec versions for equality, so a product on 0.18 cannot talk to a host still on 0.17, in either direction — every host surface has to move in the same window.
+
+  **New `worker` domain.** `getTruApi().worker` exposes the product's pending background operations: `beginOperation()` opens one and `endOperation()` closes it, and the host keeps a `Worker` product's runtime alive while at least one is open. `endOperation` is idempotent, so a retry after an ambiguous failure is safe. `createFakeTruApiClient` from `@parity/product-sdk-host/testing` carries a `worker` entry that throws when touched, matching how the other unmodeled domains behave.
+
+  **New `localStorage.subscribe`.** `getTruApi().localStorage.subscribe({ request })` emits a key's current value and then one item per later write or clear of that key by any of the product's runtimes; a write that leaves the bytes unchanged emits nothing. The fake client's `localStorage` still serves `read` / `write` / `clear` from its real in-memory KV, but `subscribe` is not modeled and throws — a test that needs it should drive the real transport instead.
+
+  **Call errors can now be `Cancelled`.** `CallErrorValue` gains a `Cancelled` unit variant, which the host returns for a call it stopped. Code that exhaustively matches on a call error's `tag` needs a new arm; code that formats by tag — including this package's own `formatHostError` — is unaffected.
+
+  **Every call takes an optional `CallOptions`.** Generated request methods accept a trailing `{ signal }` argument for withdrawing a call. A host predating the cancel leg drops the frame, and the call settles on its deadline instead; there is no way to detect that in advance. This package does not yet surface the option through its own facades.
+
 ### Patch Changes
 
-- Updated dependencies
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+  - @parity/product-sdk-host@0.22.0
+  - @parity/product-sdk-renderer@0.2.0
   - @parity/product-sdk-keys@0.4.0
+  - @parity/product-sdk-individuality@0.6.0
+  - @parity/product-sdk-signer@0.15.0
+  - @parity/product-sdk-chain-client@0.12.6
+  - @parity/product-sdk-cloud-storage@0.12.2
+  - @parity/product-sdk-local-storage@0.3.12
+  - @parity/product-sdk-contracts@0.10.10
+  - @parity/product-sdk-tx@0.4.10
+
+## 0.29.0
+
+### Minor Changes
+
+- 8675e6c: **Pair with a truapi 0.17 host.** `@parity/truapi` moves from `^0.16.0` to `^0.17.0`. The codec version stays at 2, but `TRUAPI_WIRE_SCHEMA_HASH` moves from `e883e2c0b9857933` to `50637d83426acd22`, so the schema a product speaks no longer matches a host still on 0.16. Every host surface has to move in the same window, exactly as it did for the codec-1 to codec-2 jump.
+
+  **New `pocket` domain.** `getTruApi().pocket` exposes the product's own pocket cards: `listSubscribe()` emits the whole set on subscribe and again after every change, and `removeCard()` removes one. The host owns the collection, so a product can observe and remove its cards but cannot add one. Removing a card that is not present succeeds; a privileged card is refused with `Privileged`. `createFakeTruApiClient` from `@parity/product-sdk-host/testing` carries a `pocket` entry that throws when touched, matching how the other unmodeled domains behave.
+
+  **Subscription errors are no longer `GenericError`.** Nine subscriptions now carry a per-call versioned error union instead: account connection status, chain head follow, chat list, chat action, locale, preimage lookup, renderer render, renderer action, and theme. Code that narrowed on `GenericError` in a subscription error handler needs to narrow on the specific union instead.
+
+  **Minor rather than patch**, which on 0.x signals a breaking change. This package's own API is unchanged; the break is in the error types that flow through it and in what it can talk to.
+
+### Patch Changes
+
+- Updated dependencies [8675e6c]
+  - @parity/product-sdk-host@0.21.0
+  - @parity/product-sdk-chain-client@0.12.5
+  - @parity/product-sdk-cloud-storage@0.12.1
+  - @parity/product-sdk-local-storage@0.3.11
+  - @parity/product-sdk-signer@0.14.6
+  - @parity/product-sdk-keys@0.3.26
+  - @parity/product-sdk-contracts@0.10.9
+  - @parity/product-sdk-tx@0.4.9
+
+## 0.28.0
+
+### Minor Changes
+
+- a85b489: **Re-pin every drifting chain (#242), including five that were re-genesised.**
+
+  The bundled descriptors addressed chains that no longer exist. Access is gated on the genesis
+  hash, so a stale genesis fails at connection with `GenesisMismatchError` before any storage read.
+  A stale `codeHash` only means decoding against an old metadata snapshot; a stale genesis means
+  addressing a chain that is not there.
+
+  | Chain                      | Old genesis        | New genesis        |
+  | -------------------------- | ------------------ | ------------------ |
+  | `paseo-individuality`      | `0x89a63b11…5440f` | `0x4a2b5b73…5ad48` |
+  | `previewnet-individuality` | `0x34999c29…5d220` | `0xf720c28f…35218` |
+  | `paseo-asset-hub`          | `0x23e730eb…a2ca6` | `0x4349b00e…`      |
+  | `previewnet-asset-hub`     | `0x627f5441…29659` | `0xc27c8bf3…`      |
+  | `previewnet-bulletin`      | `0x1144acd2…04e89` | `0xea9158d7…`      |
+
+  `devnet-asset-hub`, `devnet-individuality`, `kusama-asset-hub`, `paseo-bulletin` and
+  `polkadot-asset-hub` kept their genesis and took a fresh `codeHash` only. All eleven chains
+  matched their live runtimes when this was cut; codeHash pins drift on their own schedule, tracked
+  in #242.
+
+  **Minor rather than patch, because surface is removed**, which on 0.x signals a breaking change.
+  Check this before upgrading; a green `pnpm typecheck` here does not clear consumers.
+
+  | Chain                      | Removed                                                 | Added                                                                                    |
+  | -------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+  | `paseo-individuality`      | pallet `StorageInitialization`, `Score.Suffix` constant | pallets `NetworkSuffix`, `Parameters`, `AssetConversion`, `PoolAssets`, `PeopleAirdrops` |
+  | `previewnet-individuality` | `Score.Suffix` constant                                 | pallet `NetworkSuffix`                                                                   |
+  | `paseo-asset-hub`          | `AsRingAlias` transaction extension                     | pallet `NetworkSuffix`                                                                   |
+  | `previewnet-asset-hub`     | none                                                    | pallet `NetworkSuffix`                                                                   |
+  | `polkadot-asset-hub`       | none                                                    | pallet `Psm`                                                                             |
+
+  Two consequences worth reading if you use the individuality surface.
+
+  **The network suffix moved from a constant to storage on both individuality chains.** Neither
+  publishes `Score.Suffix` any more, so `readScoreContext` and `readLiteSignUpRequirement` now take
+  the `NetworkSuffixChain` overload and read it at a pinned block. A caller-supplied `tld` still wins
+  where you pass one. Previewnet's own suffix changed with it, from `test` to `testnet`, so its
+  `Score.score_context` moved from `0xa02ef8d9…` to `0x643d4ff6…`. Paseo's is unchanged at
+  `0x99f1920e…`. If you derived a context from a hardcoded `test`, it no longer matches previewnet.
+
+  **`paseo-individuality` gained `PeopleAirdrops`.** The airdrop read surface now has a chain that
+  carries the pallet, where before only previewnet did.
+
+  `@parity/product-sdk-cloud-storage` takes a minor because it now addresses a different chain:
+  `CloudStorageNetworks.previewnet.genesisHash` restated the hash by hand and was pointing at a
+  previewnet Bulletin that no longer exists. All three entries now read `.genesis` off the descriptor
+  they already sit beside, so their declared type widens from the literal hash to `` `0x${string}` ``.
+  Assignment is unaffected; only an annotation naming the literal breaks. Do the same with any hash
+  you pinned yourself, since these chains are re-genesised periodically.
+
+  `@parity/product-sdk-chain-client` needs no entry. It reads `.genesis` off the imported descriptor,
+  so only its in-source tests restated the hashes, and its published output is unchanged.
+
+- a85b489: **`buildLiteAliasBindTx` encodes the lite sign-up's bind leg entirely client-side.**
+
+  `PeopleLite.set_alias_account(account, valid_at_block)` under
+  `PeopleLiteAuth::AsLiteAliasWithProof` is an unsigned V5 _general_ extrinsic —
+  origin `None`, no signature — so it cannot ride a `PolkadotSigner`, and until
+  now the only way to assemble it was the host's `createTransaction`. With the
+  extension pipeline read from the chain's own metadata the SDK now builds the
+  whole extrinsic itself: every extra takes the value a general transaction needs
+  (`RestrictOrigins` enabled, `VerifyMultiSignature` disabled, immortal era,
+  zero nonce and tip, every origin `Option` slot `None`), the ring-VRF proof is
+  requested over the implication after `PeopleLiteAuth` — never chosen by the
+  caller — and the result is finished bytes for any raw submit, plus the proof's
+  ring coordinates for logging. `valid_at_block` is the chain's best block at
+  build time; `account` is a plain call parameter, which is what lets the
+  personhood product vouch for another product's account.
+
+  ```ts
+  const { transaction } = await buildLiteAliasBindTx(chain, {
+    account,
+    createProof: (message) =>
+      accounts.createRingVRFProof(
+        liteKeyHandle,
+        scoreContext,
+        litePeopleRing(genesis),
+        message
+      ),
+  });
+  await client.submit(`0x${bytesToHex(transaction)}`);
+  ```
+
+  The byte layout (`compact(len) ++ 0x45 ++ extensionVersion ++ extras ++ call`)
+  reproduces the encoding verified live on previewnet (spec 1000036) as the first
+  of the two lite sign-up transactions, and the tests pin it byte for byte
+  against the previewnet and paseo metadata. Chains whose `PeopleLiteAuth`
+  predates the deployed field list (devnet) are a loud error, not a plausible
+  wrong encoding. Nothing here chooses a chain, a product id or a context: run
+  `readScoreContext` first and stop on `NotProductDerived`, and skip the leg when
+  `PeopleLite.AccountToAlias` already holds the binding.
+
+  Two paths now reach this leg: `withLiteAlias({ tag: "AliasWithProof" })` has the
+  host assemble the envelope, and this builder assembles it client-side. Prefer
+  the builder unless you want the host to own the envelope, because it removes the
+  dependency on per-host `createTransaction` behaviour. Both remain supported.
+
+- a85b489: **The free lite sign-up: `readLiteSignUpRequirement` decides, `signUpWithLiteInviteTx` builds.**
+
+  `Game.sign_up_with_account_lite_invite(account, identifier_key, airdrops)` is the
+  `Pays::No`, deposit-free game sign-up a lite person's bound account submits —
+  signed by that account under `withLiteAlias({ tag: "AliasWithAccount" })`.
+  `signUpWithLiteInviteTx(chain, { account, identifierKey, airdrops, airdropsScheduled })`
+  builds it unsigned with the same width and count guards as the account sign-up.
+
+  `readLiteSignUpRequirement(chain, { account, liteMemberKey?, tld? })` is
+  `readGameSignUpRequirement` plus the lite gates, all at one pinned block. Its
+  blockers are the new `LiteSignUpBlocker` — a union of the existing
+  `SignUpBlocker` (which is unchanged, so exhaustive consumers of the account read
+  keep compiling) and nine lite arms: `AliasNotBound` (the proof-authorized
+  `PeopleLite.set_alias_account` bind leg has not run), `AliasBoundElsewhere` (the
+  binding exists outside `Score.score_context`), `StaleAlias` (the binding was
+  proven at a ring revision older than `Members.Root`, which the signed leg
+  rejects as `Custom(172)`), `AnotherAccountInvited` (the forever
+  `Game.LiteInvites` pin names a different account — carried in the blocker so a
+  UI can say which), `AlreadyPlaying` (a `Game.Players` entry exists, which
+  `sign_up_inner` rejects for an invited sign-up whatever its `registered` flag
+  says, so a returning player uses `signUpWithAccountTx`),
+  `AccountIsALitePerson` (the account is itself a lite person),
+  `AccountIsAStatementAccount` (the account is some alias's statement account,
+  which `sign_up_inner` rejects before it reaches either of the gates above),
+  `NotLiteMember` (the supplied member key is not an `Included` lite ring
+  member), and `ContextNotProductDerived` (the chain's score context is not
+  product-derived, so no stock host can mint the proof). Every lite arm blocks the
+  sign-up itself; the draw-only split carries over from the account read
+  unchanged.
+
+  ```ts
+  const req = await readLiteSignUpRequirement(chain, {
+    account,
+    liteMemberKey,
+  });
+  if (req.ok && req.value.canSignUp) {
+    const tx = signUpWithLiteInviteTx(chain, {
+      account,
+      identifierKey,
+      airdrops,
+    });
+    await submitAndWatch(
+      tx,
+      withLiteAlias(signer, { tag: "AliasWithAccount" })
+    );
+  }
+  ```
+
+  The new `LiteSignUpChain` contract (`PeopleLite.AccountToAlias`,
+  `PeopleLite.LitePeople`, `Game.LiteInvites`, `Game.StmtAccountToAlias`, `Members.Members`,
+  `Members.Root`, the sign-up call) is satisfied by paseo and previewnet; devnet predates it.
+
+  The read also resolves the score context, so it carries the same suffix
+  overloads as `readScoreContext`: previewnet resolves it from `Score.Suffix`,
+  and paseo publishes no suffix at all, so it needs `tld`. Passing a client that
+  cannot resolve one, with no `tld`, does not compile. TLDs, product ids and the
+  65-byte communication key stay caller-supplied throughout.
+
+### Patch Changes
+
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+  - @parity/product-sdk-cloud-storage@0.12.0
   - @parity/product-sdk-individuality@0.5.0
-  - @parity/product-sdk-contracts@0.10.8
+  - @parity/product-sdk-host@0.20.0
+  - @parity/product-sdk-chain-client@0.12.4
+  - @parity/product-sdk-local-storage@0.3.10
   - @parity/product-sdk-signer@0.14.5
+  - @parity/product-sdk-keys@0.3.25
+  - @parity/product-sdk-contracts@0.10.8
   - @parity/product-sdk-tx@0.4.8
-  - @parity/product-sdk-cloud-storage@0.11.4
 
 ## 0.27.0
 

@@ -217,13 +217,13 @@ For each of the 15 areas below, assign a **status** and pick a
 | 11 | Logger | `product-sdk-utilities` | scattered `console.*` ∨ custom logger | n/a |
 | 12 | Statement Store | `product-sdk-statement-store` | pub/sub pattern ∨ manual statement-store interaction | n/a |
 | 13 | Identity / DotNS | (uses `@parity/product-sdk/identity` directly) | product resolves DotNS names | n/a — **optional** simplification |
-| 14 | PAPI 2.x bump + descriptors | _(this skill)_ | `polkadot-api@^1.x` in lockfile | major version pinning by product policy |
+| 14 | PAPI 3.x bump + descriptors | _(this skill)_ | `polkadot-api` below 3.x in lockfile | major version pinning by product policy |
 | 15 | Deps + overrides | _(this skill)_ | at least one other area is in-scope | n/a |
 
 ### Sub-pattern selection per area
 
 - **(1) Bootstrap** → `createApp({ name, cloudStorage: <env|false>, logLevel })` lazy singleton in `lib/app.ts` (or equivalent). If framework is React, **prefer `ProductSDKProvider` + `useWallet`/`useStorage`/`useChain`** from `@parity/product-sdk/react` over a manual singleton — flag as opportunity even when current code is React-based but rolled its own provider. `cloudStorage: false` is **required** when area 9 is out of scope (default opens an unnecessary WebSocket).
-- **(2) Chain access** → preset path `getChainAPI('paseo')` (zero-config) vs BYOD `createChainClient({ chains })`. For container apps, also route via `getHostProvider(genesisHash)` from `@parity/product-sdk-host` with a direct-WS fallback. Cache the chain client **per-chain** so a single failed chain doesn't bring down the others. Note: 'paseo' resolves to **Paseo Next v2** chains in current SDK (`@parity/product-sdk-chain-client@0.4.1+`, `@parity/product-sdk-host@0.2.2+`, `@parity/product-sdk-cloud-storage@0.4.2+`).
+- **(2) Chain access** → preset path `getChainAPI('paseo')` (zero-config) vs BYOD `createChainClient({ chains })`. Both paths already route through the host provider (`getHostProvider(genesisHash)` from `@parity/product-sdk-host`) with no direct-WebSocket fallback, so don't wire one up; check reachability first with `isChainSupported(genesisHash)`. Cache the chain client **per-chain** so a single failed chain doesn't bring down the others. Note: 'paseo' resolves to **Paseo Next v2** chains in current SDK (`@parity/product-sdk-chain-client@0.4.1+`, `@parity/product-sdk-host@0.2.2+`, `@parity/product-sdk-cloud-storage@0.4.2+`).
 - **(3) Wallet / Signer** → `SignerManager` from `@parity/product-sdk-signer`. If Cloud Storage (9) is in scope, **also** call `app.wallet.connect()` + `app.wallet.selectAccount(addr)` after the existing connection flow so the App-bound signer is populated (gotcha G2).
 - **(4) Crypto** → `@parity/product-sdk-crypto`: `aesGcmEncryptText`/`Decrypt`, `boxEncrypt`/`Decrypt`, `deriveKey`, `randomBytes`, `nacl` re-export.
 - **(5) Utils** → `@parity/product-sdk-utils`: `bytesToHex`, `hexToBytes`, `utf8ToBytes`, `concatBytes`, `sha256`, `blake2b256`, `keccak256`, `formatPlanck`, `parseToPlanck`, `getBalance`. Prefer the leaf package over the `@parity/product-sdk/crypto` re-exports in new code.
@@ -250,7 +250,7 @@ For each of the 15 areas below, assign a **status** and pick a
 - **(11) Logger** → `configure({ level })` once at bootstrap. Wrap the existing `createLogger(prefix)` so app-level call sites don't change.
 - **(12) Statement Store** → `StatementStoreClient` with `{ mode: 'host', accountId }` inside containers, `{ mode: 'local', signer }` standalone. Use `ChannelStore` for stable two-party streams.
 - **(13) Identity / DotNS** → `resolveDotNs` / `reverseDotNs` from `@parity/product-sdk/identity` instead of writing the contract call by hand. Status: **no** when the product does not use DotNS at all (nothing to migrate); **optional** when the product already integrates DotNS via a hand-rolled contract call (simplification opportunity — the hand-rolled call still works; replacing it is a nice-to-have).
-- **(14) PAPI 2.x + descriptors** → bump `polkadot-api` 1.x → ^2.x plus aligned subpackages (`substrate-bindings`, `substrate-client`, `observable-client`, `metadata-compatibility`, `polkadot-sdk-compat`, `sdk-ink`, `sdk-statement`, `utils`); replace `polkadot-api/ws-provider/web` → `polkadot-api/ws`; replace `Binary.fromBytes`/`.asHex()` with `Binary.toHex(uint8)` and raw `Uint8Array`; rewrite event watching to iterate `watch().{block,events[]}`; bump `.papi/descriptors/package.json` to match.
+- **(14) PAPI 3.x + descriptors** → bump `polkadot-api` to ^3.x plus aligned subpackages (`substrate-bindings`, `substrate-client`, `observable-client`, `metadata-compatibility`, `polkadot-sdk-compat`, `sdk-ink`, `sdk-statement`, `utils`); replace `polkadot-api/ws-provider/web` → `polkadot-api/ws`; replace `Binary.fromBytes`/`.asHex()` with `Binary.toHex(uint8)` and raw `Uint8Array`; rewrite event watching to iterate `watch().{block,events[]}`; from 2.x, replace every `PolkadotSigner` with a PAPI 3 `TxCreator` (`getPolkadotSigner` becomes `getTxCreator` from `polkadot-api/tx-creator`), `signSubmitAndWatch` / `signAndSubmit` with `createSubmitAndWatch` / `createAndSubmit`, `getEstimatedFees(address)` with `getEstimatedFees(getFakeTxCreator(address))`, and the `signed` and `txBestBlocksState` events with `created`, `inBestBlock` and `notInBestBlock`; bump `.papi/descriptors/package.json` to match.
 - **(15) Deps + overrides** → see the "Cross-cutting work → Dependencies and overrides" block in the Phase 3 spec template (below) for the canonical add/remove/override lists.
 
 ### Checkpoint
@@ -264,7 +264,7 @@ illustrative — yours must reflect the actual repo):
 | #  | Area              | Status   | Sub-pattern                                     | Notes                              |
 |----|-------------------|----------|-------------------------------------------------|------------------------------------|
 | 1  | Bootstrap         | yes      | createApp({ name: '<repo>', cloudStorage: false }) | Singleton in lib/app.ts            |
-| 2  | Chain access      | yes      | getChainAPI('paseo') + getHostProvider fallback | dual; per-chain cache              |
+| 2  | Chain access      | yes      | getChainAPI('paseo')                            | host-routed; per-chain cache       |
 | 4  | Crypto            | yes      | replace tweetnacl + skiff-adapter               |                                    |
 | 6  | Key management    | deferred | KeyManager.fromSignature only                   | G3 — info-string mismatch persists |
 | 8  | App storage       | no       |                                                 | sessionStorage only                |
@@ -322,11 +322,12 @@ files affected (with paths), owning SDK skill, notes.
 [... one subsection per area from the matrix ...]
 
 ## Cross-cutting work
-### PAPI 2.x bump + descriptors
-- Bump polkadot-api 1.x → ^2.x plus aligned subpackages: [list]
+### PAPI 3.x bump + descriptors
+- Bump polkadot-api to ^3.x plus aligned subpackages: [list]
 - Import path migrations: ws-provider/web → ws (N files)
 - Binary API: .asHex()/.fromBytes() → Binary.toHex(uint8) / raw Uint8Array
 - Event watching: api.event.X.watch(filter) → watch().{block,events[]} + filter in subscriber
+- Signers: PolkadotSigner → TxCreator, sign* tx methods → create*, tx events renamed (N files)
 - .papi/descriptors/package.json bumped to <version>
 
 ### Dependencies and overrides
@@ -375,7 +376,7 @@ must do this explicitly; it does not emerge from the per-area work.
 ## Recommended ordering
 Phases (each = independent commit-worthy chunk):
 1. Deps + overrides (failure mode contained)
-2. PAPI 2.x adapt (mechanical)
+2. PAPI 3.x adapt (mechanical)
 3. Address utils inline (low risk, deletions)
 4. Crypto + utils swap (mechanical, byte-identical verifiable)
 5. Logger swap (low risk)

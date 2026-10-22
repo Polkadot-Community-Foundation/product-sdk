@@ -53,7 +53,7 @@
  * spoofed. Anything that gates value must verify on chain itself.
  *
  * The write half needs no chain client and no submitter of its own. It returns a
- * `PolkadotSigner`, so it composes with `@parity/product-sdk-tx`:
+ * PAPI 3 transaction creator, so it composes with `@parity/product-sdk-tx`:
  *
  * ```ts
  * import { submitAndWatch } from "@parity/product-sdk-tx";
@@ -76,6 +76,8 @@
 // The seven-state union, its wrappers, and the pinned-block coordinates.
 export type {
     AbsenceGracePolicy,
+    BlockAt,
+    BlockSnapshot,
     FinalizedSnapshot,
     PersonhoodInputs,
     PersonhoodMetrics,
@@ -175,6 +177,29 @@ export type {
     ReadGameAirdropEventIdsOptions,
 } from "./airdrop-read.js";
 
+// `PeopleAirdrops`, the recurring draws a person enters under their airdrop
+// alias: where an account stands in every draw, which origin a registration
+// needs, and the register calls chunked to the runtime's batch limit.
+export {
+    FALLBACK_PEOPLE_AIRDROPS_REGISTER_BATCH,
+    derivePeopleAirdropsSlot,
+    peopleAirdropsRegisterCalls,
+    readPeopleAirdropsSigning,
+    readPeopleAirdropsStanding,
+} from "./people-airdrops.js";
+export type {
+    PeopleAirdropEntry,
+    PeopleAirdropsAlias,
+    PeopleAirdropsBinding,
+    PeopleAirdropsChain,
+    PeopleAirdropsRegisterCall,
+    PeopleAirdropsRegisterChain,
+    PeopleAirdropsSigning,
+    PeopleAirdropsStanding,
+    RawPeopleAccountAlias,
+    ReadPeopleAirdropsOptions,
+} from "./people-airdrops.js";
+
 // The composed read behind `getDailyPrizeStatus`: a game's draws and this
 // identity's outcome in each, all at one pinned block. A caller cannot assemble
 // this from the two reads above without pinning two blocks.
@@ -223,17 +248,59 @@ export { readCurrentGame } from "./game-read.js";
 export type { GameChain, GamePlayersChain, ReadCurrentGameOptions } from "./game-read.js";
 export type { PlayerKey } from "./player-key.js";
 
+// Best-block subscriptions over the same decoders as the pinned reads, for a UI that
+// follows the game live. Each returns its stop function and reports errors to `onError`.
+export { watchCurrentGame, watchParticipant, watchPlayer } from "./watch.js";
+export type {
+    CurrentGameWatchChain,
+    ParticipantWatchChain,
+    PlayerRecord,
+    PlayerWatchChain,
+    WatchAt,
+    WatchedBlock,
+    WatchedValue,
+    WatchErrorHandler,
+    WatchPlayerOptions,
+} from "./watch.js";
+
+// The roster of the running game. It exists from the end of the shuffle until
+// `PlayerProcess` drains it, which is exactly when `CurrentGame.playerCount` is set.
+export {
+    groupSeats,
+    numberOfGroups,
+    readCommunicationIdentifier,
+    readCreditCandidates,
+    readGroupMembers,
+    readPlayerIndices,
+} from "./roster.js";
+export type {
+    CommunicationIdentifierResult,
+    CreditCandidate,
+    CreditCandidatesChain,
+    CreditCandidatesResult,
+    GroupMember,
+    GroupMembersResult,
+    GroupSeat,
+    PlayerIndicesResult,
+    ReadCommunicationIdentifierOptions,
+    ReadCreditCandidatesOptions,
+    ReadGroupMembersOptions,
+    ReadPlayerIndicesOptions,
+    RosterChain,
+} from "./roster.js";
+
 // For callers holding their own PAPI client: build the chain shape without
 // `@parity/product-sdk-chain-client`.
 export { fromPapi } from "./chain.js";
-export type { FinalizedBlockSource, PapiIndividualityChain } from "./chain.js";
+export type { BlockSource, FinalizedBlockSource, PapiIndividualityChain } from "./chain.js";
 
 // Signing up for the game, and entering its prize draws in the same call. The
 // requirement read comes first because the event ids depend on the game index and
 // the draw count together, and the entry count must match `airdrops_scheduled`
-// exactly. Only the `Account` variant is buildable: the `Alias` one needs a
-// ring-VRF proof at a chain-chosen context, and every context a host will sign
-// under is derived from the product id. `signup-types.ts` has the detail.
+// exactly. Both variants are buildable since People runtime 3004000: the
+// `Alias` one is a People-ring proof per draw in the product context
+// `product/<product_name>.<tld>/<event_id>`, which is what a host mints for
+// `{ productId, suffix: Raw(eventId) }`. `signup-types.ts` has the detail.
 export type {
     AccountVrfSignature,
     AirdropVrfVariant,
@@ -250,14 +317,24 @@ export {
 export type { VrfTranscript, VrfTranscriptItem } from "./signup-vrf.js";
 export {
     mintAccountAirdropVrfs,
+    mintAliasAirdropVrfs,
     readGameSignUpRequirement,
+    readSignUpFunds,
     signUpWithAccountTx,
 } from "./signup.js";
 export type {
     AirdropVrfSigner,
+    AliasAirdropProofSigner,
+    AliasAirdropVrfs,
+    AliasDrawProofContext,
+    FeeEstimable,
     MintAccountAirdropVrfsOptions,
+    MintAliasAirdropVrfsOptions,
     ReadGameSignUpRequirementOptions,
+    ReadSignUpFundsOptions,
     SignUpChain,
+    SignUpFunds,
+    SignUpFundsChain,
     SignUpWithAccountOptions,
 } from "./signup.js";
 
@@ -282,6 +359,15 @@ export type {
     ConfirmClaimOptions,
     ReadClaimEligibilityOptions,
 } from "./claim.js";
+
+// Reporting on a finished game, and leaving the game. Unsigned, like `claimPrizeTx`.
+// Both take the score participant origin, so wrap the signer in `withScoreParticipant`.
+export { offboardTx, reportTx } from "./report.js";
+export type { RawReportVote, ReportChain, ReportOptions, ReportVote } from "./report.js";
+
+// The hash of one NFT claim credit, derived offline. Reading the claims the chain has
+// awarded belongs to `@parity/product-sdk-nfts`, which carries the proof a mint needs.
+export { creditHash } from "./credits.js";
 
 // Proof contexts, derived offline. Everything a host signs under is
 // `blake2b-256("product/" ++ productId ++ "/" ++ suffix)`, so a product can
@@ -325,7 +411,7 @@ export type {
 } from "./rings.js";
 
 // The write half: wrap a signer so the call runs under a person origin. Returns
-// a `PolkadotSigner`, so submission stays with `@parity/product-sdk-tx`.
+// a PAPI 3 transaction creator, so submission stays with `@parity/product-sdk-tx`.
 export { withAsPerson } from "./as-person-signer.js";
 export type { AsPersonInfo, CreateRingVRFProof, RingVRFProof } from "./as-person-signer.js";
 
@@ -386,6 +472,64 @@ export type {
 // and the participant arm of Game.report, from a 0-balance account.
 export { withScoreParticipant } from "./as-score-participant-signer.js";
 
+// Registering for the game in one call, from any product: the game account every
+// product names, the seat (which route, and whether it can go now, by the chain's
+// clock), the lite bind, and the sign-up with its draw entries. Every failure is a
+// `GameRegistrationError` naming its step and whether a retry can help, and every
+// outcome carries a report for telemetry. The host side comes in as capabilities;
+// `@parity/product-sdk-individuality/host` builds them from a host and `tx`.
+export { GAME_ACCOUNT_INDEX, GAME_PRODUCT_NAME, gameProductId } from "./game-account.js";
+export { DEFAULT_FEE_HEADROOM, deriveSeat, readGameSeat, seatRequired } from "./seat.js";
+export type {
+    GameSeat,
+    GameSeatChain,
+    ReadGameSeatOptions,
+    Seat,
+    SeatFacts,
+    SeatPath,
+    SeatRoute,
+    TimestampChain,
+} from "./seat.js";
+export { bindGameSeat, holdsLiteKey } from "./bind-game-seat.js";
+export type { BindGameSeatOptions } from "./bind-game-seat.js";
+export {
+    GAME_REGISTRATION_RETRY_MS,
+    GameRegistrationError,
+    GameSeatBindError,
+    registrationRetryDelay,
+} from "./register-game-errors.js";
+export type { GameRegistrationCode, GameRegistrationOwnCode } from "./register-game-errors.js";
+export { registerForGame } from "./register-game.js";
+export type {
+    DrawWaitOptions,
+    RegisterForGameOptions,
+    RegisterForGameOutcome,
+} from "./register-game.js";
+export type {
+    BindGameSeatOutcome,
+    DrawOutcome,
+    DrawSkipKind,
+    GameAccount,
+    GameRegistrationCapabilities,
+    GameRegistrationChain,
+    GameRegistrationReport,
+    GameRegistrationStage,
+    GameRegistrationStep,
+    GameSeatBindChain,
+    GameSeatBindRefusal,
+    PersonhoodKey,
+    PersonhoodProofContext,
+    PersonhoodProver,
+    PersonhoodRing,
+    RawSubmitChain,
+    SignUpSubmitOptions,
+    SignUpSubmitResult,
+    SignUpTransaction,
+    SubmitSignUp,
+    TxWatch,
+    TxWatchEvent,
+} from "./register-game-types.js";
+
 // The metadata-driven pieces underneath stay internal on purpose, even though
 // `withLiteAlias` proves they generalise: widening a surface later never breaks
 // anyone, narrowing one after it ships does. Export them when something outside
@@ -394,5 +538,5 @@ export { withScoreParticipant } from "./as-score-participant-signer.js";
 // Errors. `UsernameUnowned` is not one of them — it travels on the success
 // channel as a `PersonhoodResult`. `AsPersonError` is the write half's, and
 // unlike the others it is thrown rather than returned, because it happens inside
-// `PolkadotSigner.signTx` where there is no `Result` channel.
+// a PAPI 3 `TxCreator` where there is no `Result` channel.
 export { AsPersonError, IndividualityDecodeError, ProductIndividualityError } from "./errors.js";

@@ -356,10 +356,10 @@ if (import.meta.vitest) {
         paseo_asset_hub: "0x4349b00e54897e21196fd331015fc5be0f14e118beb0375ed2bb1793737bb57a",
         paseo_bulletin: "0x8cfe6717dc4becfda2e13c488a1e2061ff2dfee96e7d031157f72d36716c0a22",
         paseo_individuality: "0x4a2b5b737de1da59e209b0000a876ec2fa20035dc34fd292a848da32d255ad48",
-        previewnet_asset_hub: "0xc27c8bf3f13f96dc2130cd2b0a3debe57618fd02521ecc1902bd7dd4ed83d2fe",
+        previewnet_asset_hub: "0xbac97e23fc8f4bccae72a98f8aeb2bcab20bf755862304e4b46ad6473456e896",
         previewnet_bulletin: "0xea9158d768971553e315b76323cbffda238b6b865f3d3d5e138350b12312173d",
         previewnet_individuality:
-            "0xf720c28fe3315e67fa799a616fc59abad47dd257b1a336af6538435844d35218",
+            "0x55e3e689ecfa9d2fffcf7d309b8011956671493982230bfd0420c683542249e9",
         devnet_asset_hub: "0xd6eec26135305a8ad257a20d003357284c8aa03d0bdb2b357ab0a22371e11ef2",
         devnet_bulletin: "0xe101f0fa4627d29a257645e02be86d80378fea1a2bf8fa6a918d150ebc760a59",
         devnet_individuality: "0xe6c30d6e148f250b887105237bcaa5cb9f16dd203bf7b5b9d4f1da7387cb86ec",
