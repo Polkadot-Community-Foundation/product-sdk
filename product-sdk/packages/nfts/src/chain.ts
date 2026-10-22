@@ -21,9 +21,8 @@
  * Written with method shorthand on purpose: the parameter bivariance that gives
  * is what lets the real PAPI signatures satisfy the loosened key types.
  *
- * **Not every supported network carries these pallets.** `devnet-asset-hub` has
- * neither `Scarcity` nor `NftClaims`, so an e2e spec against the devnet preset
- * cannot exercise any of this, and a read against it fails with
+ * Paseo, previewnet and devnet (since its re-pin on spec 2005004) carry these
+ * pallets. A chain without them, such as Polkadot Asset Hub, fails a read with
  * {@link NftsChainEntryError}.
  *
  * Matched by hand on 2026-08-25 against live `next-asset-hub-paseo`
