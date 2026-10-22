@@ -128,9 +128,8 @@ if (import.meta.vitest) {
 
     const PASEO = readExtensionPipeline(blob("paseo_individuality"));
     const PREVIEWNET = readExtensionPipeline(blob("previewnet_individuality"));
-    // Devnet declares the same field list since its Paseo v2.5.2 re-pin, and
-    // one extension more than the other two, so it pins the codec against a
-    // pipeline that is longer but not different where it matters.
+    // Devnet declares the same field list since its Paseo v2.5.2 re-pin, in an
+    // unversioned pipeline, so it pins the codec against a third chain's blob.
     const DEVNET = readExtensionPipeline(blob("devnet_individuality"));
 
     /** Local hex formatter, deliberately not the one the code under test uses. */

@@ -409,8 +409,8 @@ if (import.meta.vitest) {
     // The chain the two-transaction lite flow ran live on (spec 1000036).
     const PREVIEWNET = blob("previewnet_individuality");
     const PASEO = blob("paseo_individuality");
-    // Same field list since its Paseo v2.5.2 re-pin, one extension more
-    // (CheckMetadataHash): the pipeline with the devnet-only row in the extras.
+    // Same field list and the same 23 extensions since its Paseo v2.5.2 re-pin,
+    // but as extension version 0: devnet has no versioned pipelines yet.
     const DEVNET = blob("devnet_individuality");
 
     const ACCOUNT = "5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY";
@@ -691,15 +691,12 @@ if (import.meta.vitest) {
             }
         });
 
-        test("builds on devnet, whose pipeline is one slot longer", async () => {
-            // Devnet declares CheckMetadataHash between ChargeAssetTxPayment and
-            // StorageWeightReclaim, the slot the extras table calls devnet-only.
-            // Its `Disabled` mode is one zero byte, so the extrinsic is 66 bytes
-            // and the compact prefix follows: ((66 << 2) | 0b01) little-endian.
+        test("builds on devnet with extension version 0", async () => {
+            // Devnet carries PeopleLiteAuth in its only pipeline, version 0, with
+            // the same 23 extensions previewnet declares as version 1. The extras
+            // and the length are the same; only the version byte differs.
             const { transaction } = await build(fakeChain(DEVNET).chain);
-            expect(hex(transaction)).toBe(
-                `0x09014500${EXPECTED_EXTRAS}00${hex(CALL_DATA).slice(2)}`,
-            );
+            expect(hex(transaction)).toBe(`0x09014500${EXPECTED_EXTRAS}${hex(CALL_DATA).slice(2)}`);
         });
 
         test("aborting while the proof is in flight throws instead of encoding", async () => {
