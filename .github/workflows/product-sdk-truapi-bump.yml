@@ -7,8 +7,8 @@
 name: "product-sdk: truapi bump"
 
 on:
-    schedule:
-        - cron: "*/5 * * * *"
+    # PCF fork: no schedule and `detect` is gated off. Both jobs need Parity's
+    # self-hosted runner and release app.
     workflow_dispatch:
 
 concurrency:
@@ -26,6 +26,7 @@ jobs:
     # Runs every 5 minutes, so it stays off the `main` environment: an
     # environment job records a deployment on each run.
     detect:
+        if: false
         name: "Detect new truapi release"
         runs-on: parity-default
         timeout-minutes: 5
