@@ -8,7 +8,11 @@ import { waitForAppReady } from "./helpers";
 // `test-host:${key}`. We poll for that key directly so we can reload only
 // after the postMessage round-trip has actually flushed — avoiding a
 // timing race where reload() races the persist write.
-const STORAGE_KEY = "test-host:product-sdk:signer:signer-demo:selectedAccount";
+// The product's own storage key. It carried a `test-host:` prefix while this
+// suite ran against @parity/host-api-test-sdk, which was that host's internal
+// namespace rather than anything the product chose; the host namespaces keys
+// itself, so a test naming one should name only the product's part.
+const STORAGE_KEY = "product-sdk:signer:signer-demo:selectedAccount";
 
 test.describe("@parity/product-sdk-signer — persistence", () => {
     test("selected account survives a page reload via hostLocalStorage", async ({
@@ -33,14 +37,22 @@ test.describe("@parity/product-sdk-signer — persistence", () => {
         expect(beforeReload).toBeTruthy();
 
         // Wait for SignerManager.persistAccount to flush through the
-        // postMessage round-trip into host localStorage. Without this we
-        // race reload() against the async write — passes alone, fails when
-        // run after other specs that warm up the test runner.
-        await page.waitForFunction(
-            ({ key, addr }) => window.localStorage.getItem(key) === addr,
-            { key: STORAGE_KEY, addr: beforeReload },
-            { timeout: 10_000 },
-        );
+        // postMessage round-trip into host storage. Without this we race
+        // reload() against the async write — passes alone, fails when run
+        // after other specs that warm up the test runner.
+        //
+        // Read through the control surface rather than the host page's own
+        // localStorage: how the host keys its storage is its business, and a
+        // test that reaches into it is pinned to one host's implementation.
+        await expect
+            .poll(
+                async () => {
+                    const stored = await testHost.findProductStorage(STORAGE_KEY);
+                    return stored ? new TextDecoder().decode(stored) : undefined;
+                },
+                { timeout: 10_000 },
+            )
+            .toBe(beforeReload);
 
         // Full page reload: browser drops the iframe + container, rebuilds
         // everything from scratch. SignerManager.connect() re-runs and its

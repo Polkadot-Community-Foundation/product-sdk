@@ -1,6 +1,6 @@
 {
     "name": "@parity/product-sdk-host",
-    "version": "0.19.1",
+    "version": "0.29.0",
     "description": "Host container detection and storage access for Polkadot Desktop and Mobile environments",
     "type": "module",
     "sideEffects": false,
@@ -15,6 +15,10 @@
         "./testing": {
             "import": "./dist/testing.js",
             "types": "./dist/testing.d.ts"
+        },
+        "./tx-creator": {
+            "import": "./dist/tx-creator.js",
+            "types": "./dist/tx-creator.d.ts"
         }
     },
     "files": ["dist", "src"],
@@ -30,7 +34,9 @@
         "@parity/result": "workspace:*",
         "@parity/truapi": "catalog:",
         "@polkadot-api/json-rpc-provider": "catalog:",
+        "@polkadot-api/signers-common": "catalog:",
         "@polkadot-api/substrate-bindings": "catalog:",
+        "@polkadot-api/tx-creator": "catalog:",
         "neverthrow": "^8.2.0",
         "polkadot-api": "catalog:"
     },

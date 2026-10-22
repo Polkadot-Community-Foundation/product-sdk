@@ -14,13 +14,13 @@ test.describe("@parity/product-sdk-signer — onConnect lifecycle hook", () => {
         // selectAccount / state mutations.
         await expect(status).toContainText("fired (1×)", { timeout: 30_000 });
 
-        // Permission result resolves to an `outcomes:` line once the test host
-        // (≥ 0.7.4) replies to `host_request_resource_allocation`. The
-        // `error:` branch is the fallback for older hosts that don't
-        // implement the handler — keeping it future-proofs against host
-        // regressions or environments running an older test SDK.
+        // TODO(truapi-migration) #235: asserting the answered-and-denied outcome
+        // needs the host to withhold AutoSigning, which `setWithheldResources`
+        // serves. That is merged in truapi but not in a published version yet,
+        // so this run allocates and the outcome is `Allocated`. Restore the
+        // `Rejected` assertion once the fixture can withhold.
         const result = frame.locator('[data-testid="onconnect-result"]');
-        await expect(result).toHaveText(/^(outcomes:|error:)/, { timeout: 10_000 });
+        await expect(result).toHaveText(/outcomes: (Rejected|Allocated)/, { timeout: 10_000 });
 
         // Reconnect: disconnect + connect should fire onConnect a second time.
         await frame.locator('[data-testid="btn-reconnect"]').click();

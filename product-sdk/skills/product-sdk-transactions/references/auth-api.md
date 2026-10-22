@@ -62,7 +62,7 @@ interface SessionAddresses {
 interface SessionHandle {
   address: string;
   addresses: SessionAddresses;
-  signer: PolkadotSigner;
+  signer: CommonSignerTxCreator;
   userSession: UserSession;
   destroy(): void;                 // REQUIRED — tears down the adapter WebSocket
 }
@@ -85,7 +85,7 @@ interface SignerOptions { suri?: string }        // takes priority over the sess
 type SignerSource = "dev" | "session";
 
 interface ResolvedSigner {
-  signer: PolkadotSigner;
+  signer: CommonSignerTxCreator;
   address: string;
   source: SignerSource;
   userSession?: UserSession;       // QR/mobile only (undefined for dev signers)
@@ -100,7 +100,7 @@ interface ResolvedSigner {
 ### Allocations (RFC-0010)
 
 ```ts
-const DEFAULT_RESOURCES: AllocatableResource[]; // BulletInAllowance, StatementStoreAllowance, SmartContractAllowance(0)
+const DEFAULT_RESOURCES: AllocatableResource[]; // BulletInAllowance, StatementStoreAllowance, SmartContractAllowance { tag: "Index", value: 0 }
 
 // Standalone twin of authClient.requestAllocation — for callers that already have a session + productId.
 function requestResourceAllocation(
@@ -117,7 +117,8 @@ function summarizeOutcomes(
 ): { granted: AllocatableResource[]; rejected: AllocatableResource[]; unavailable: AllocatableResource[] };
 
 type AllocationOutcome;              // re-export of terminal's ApAllocationOutcome; .tag: "Allocated" | "Rejected" | …
-type AllocatableResource;            // re-export from terminal ({ tag, value })
+type AllocatableResource;            // re-export from terminal; NOT the host package's same-named
+                                     // type (that one spells BulletinAllowance, Raw is hex)
 type ResourceTag = AllocatableResource["tag"];
 type OnExistingAllowancePolicy;      // re-export from terminal
 ```
@@ -125,7 +126,7 @@ type OnExistingAllowancePolicy;      // re-export from terminal
 ### Session-signer primitives (re-exported from `@parity/product-sdk-terminal`)
 
 ```ts
-createSessionSigner(session, ref: ProductAccountRef, options?): Promise<PolkadotSigner>;
+createSessionSigner(session, ref: ProductAccountRef, options?): Promise<CommonSignerTxCreator>;
 deriveProductPublicKey(session, ref: ProductAccountRef, options?): Promise<Uint8Array>;
 getProductSubtreePublicKey(session, productId, options?): Promise<Uint8Array>;
 sessionRootPublicKey(session: UserSession): Uint8Array;  // the wallet's root, NOT a product account

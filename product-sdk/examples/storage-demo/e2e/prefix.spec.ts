@@ -37,11 +37,15 @@ test.describe("@parity/product-sdk-local-storage via Host API — prefix namespa
             { timeout: 30_000 },
         );
 
-        // Verify host-side: the key should be stored as "test-host:demo:mykey"
-        const hostValue = await testHost.page.evaluate(() =>
-            localStorage.getItem("test-host:demo:mykey"),
-        );
-        expect(hostValue).toBe("prefixed-val");
+        // Verify host-side: the product's prefixed key reached host storage.
+        // Read through the control surface rather than the host's own
+        // localStorage -- the host's key namespacing is an implementation
+        // detail, and asserting on it is what tied this suite to one host.
+        const stored = await testHost.findProductStorage("demo:mykey");
+        expect(stored).toBeDefined();
+        expect(new TextDecoder().decode(stored!)).toBe("prefixed-val");
+        // The bare key is absent, which is what proves the prefix was applied.
+        expect(await testHost.findProductStorage("mykey")).toBeUndefined();
     });
 
     test("prefixed and unprefixed stores don't collide", async ({ testHost }) => {

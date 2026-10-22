@@ -41,20 +41,33 @@ import type {
     AirdropChain,
     ClaimChain,
     ConsumersChain,
+    CreditCandidatesChain,
+    CurrentGameWatchChain,
+    FeeEstimable,
     GameChain,
     GamePlayersChain,
+    GameRegistrationChain,
+    GameSeatBindChain,
+    GameSeatChain,
     IndividualityChain,
     LegacySuffixChain,
     LiteAliasBindChain,
     LiteSignUpChain,
+    PeopleAirdropsChain,
+    PeopleAirdropsRegisterChain,
     NetworkSuffixChain,
     PapiIndividualityChain,
+    ParticipantWatchChain,
+    PlayerWatchChain,
     PrizeStatusChain,
     RegisterChain,
     RegistrationEligibilityChain,
+    ReportChain,
     RingLocation as SdkRingLocation,
+    RosterChain,
     ScoreContextChain,
     SignUpChain,
+    SignUpFundsChain,
     AccountVrfSignature,
     VrfTranscriptItem as IndividualityVrfTranscriptItem,
     RingVRFProof as AsPersonRingVRFProof,
@@ -100,6 +113,20 @@ type PreviewnetSatisfiesAirdropContract = Assert<
     PreviewnetClient extends AirdropChain ? true : false
 >;
 
+// `PeopleAirdrops` — the recurring draws entered under an airdrop alias. The
+// chain contracts were written from the pallet's storage and calls, so these are
+// what tie them to the emitted descriptors. Devnet's runtime predates the pallet.
+type PaseoSatisfiesPeopleAirdrops = Assert<PaseoClient extends PeopleAirdropsChain ? true : false>;
+type PreviewnetSatisfiesPeopleAirdrops = Assert<
+    PreviewnetClient extends PeopleAirdropsChain ? true : false
+>;
+type PaseoSatisfiesPeopleAirdropsRegister = Assert<
+    PaseoClient extends PeopleAirdropsRegisterChain<unknown> ? true : false
+>;
+type PreviewnetSatisfiesPeopleAirdropsRegister = Assert<
+    PreviewnetClient extends PeopleAirdropsRegisterChain<unknown> ? true : false
+>;
+
 // Same again for the current-game contract, which shares no entry with either of
 // the other two.
 type PaseoSatisfiesGameContract = Assert<PaseoClient extends GameChain ? true : false>;
@@ -130,7 +157,9 @@ type FromPapiSatisfiesContracts = Assert<
         GamePlayersChain &
         ScoreContextChain &
         SignUpChain &
-        LiteSignUpChain
+        LiteSignUpChain &
+        CreditCandidatesChain &
+        WatchChains
         ? true
         : false
 >;
@@ -330,10 +359,72 @@ type ClaimAirdropTakesTheDocumentedArgs = Assert<
         : false
 >;
 
+// The report and offboard builders touch `tx` only. `full_report` and the two vote
+// variants are pinned by name, since PAPI encodes whatever object it is handed.
+type PaseoSatisfiesReportContract = Assert<PaseoClient extends ReportChain ? true : false>;
+type PreviewnetSatisfiesReportContract = Assert<
+    PreviewnetClient extends ReportChain ? true : false
+>;
+type RejectsBogusReportClient = Assert<
+    ClientWithoutIndividuality extends ReportChain ? false : true
+>;
+type ReportArgs = Parameters<GameTx["report"]>[0];
+type ReportTakesFullReport = Assert<"full_report" extends keyof ReportArgs ? true : false>;
+type ReportVoteVariant = ReportArgs["full_report"][number][number]["type"];
+type ReportVotesArePersonAndNotPerson = Assert<
+    [ReportVoteVariant] extends ["Person" | "NotPerson"]
+        ? ["Person" | "NotPerson"] extends [ReportVoteVariant]
+            ? true
+            : false
+        : false
+>;
+
+// The roster reads, and the candidates read that adds `Game.Game` to them.
+// `IndexToPlayer.getValues` takes each `[round, index]` tuple as a single key.
+type PaseoSatisfiesRosterContract = Assert<PaseoClient extends RosterChain ? true : false>;
+type PreviewnetSatisfiesRosterContract = Assert<
+    PreviewnetClient extends RosterChain ? true : false
+>;
+type PaseoSatisfiesCreditCandidatesContract = Assert<
+    PaseoClient extends CreditCandidatesChain ? true : false
+>;
+type PreviewnetSatisfiesCreditCandidatesContract = Assert<
+    PreviewnetClient extends CreditCandidatesChain ? true : false
+>;
+type RejectsBogusRosterClient = Assert<
+    ClientWithoutIndividuality extends RosterChain ? false : true
+>;
+
+// The watches take `watchValue` rather than `getValue`, which the pinned contracts
+// never name, so a PAPI release that changed its emission shape fails here.
+type WatchChains = CurrentGameWatchChain & PlayerWatchChain & ParticipantWatchChain;
+type PaseoSatisfiesWatchContracts = Assert<PaseoClient extends WatchChains ? true : false>;
+type PreviewnetSatisfiesWatchContracts = Assert<
+    PreviewnetClient extends WatchChains ? true : false
+>;
+type RejectsBogusWatchClient = Assert<
+    ClientWithoutIndividuality extends CurrentGameWatchChain ? false : true
+>;
+
 // Game sign-up.
 type PaseoSatisfiesSignUpContract = Assert<PaseoClient extends SignUpChain ? true : false>;
 type RejectsBogusSignUpClient = Assert<
     ClientWithoutIndividuality extends SignUpChain ? false : true
+>;
+
+// The cost read also takes the raw client, for the chain spec that names the token.
+type PaseoSatisfiesSignUpFundsContract = Assert<
+    PaseoClient extends SignUpFundsChain ? true : false
+>;
+type PreviewnetSatisfiesSignUpFundsContract = Assert<
+    PreviewnetClient extends SignUpFundsChain ? true : false
+>;
+type RejectsBogusSignUpFundsClient = Assert<
+    ClientWithoutIndividuality extends SignUpFundsChain ? false : true
+>;
+// The fee comes from the built sign-up itself, so a real PAPI transaction must fit.
+type SignUpTxIsFeeEstimable = Assert<
+    ReturnType<GameTx["sign_up_with_account"]> extends FeeEstimable ? true : false
 >;
 
 // `SignUpChain` alone cannot reject a chain with the old call shape: a `tx`
@@ -461,6 +552,38 @@ type FromPapiSatisfiesBindContract = Assert<
 >;
 type RejectsBogusBindClient = Assert<
     ClientWithoutIndividuality extends LiteAliasBindChain ? false : true
+>;
+
+// Registering for the game in one call composes every read and builder above
+// with the two submission methods PAPI hands back (`createSubmitAndWatch` on a
+// transaction, `submitAndWatch` on the client) and `Timestamp.Now`. These are
+// the contracts the game's app, its chat worker and the personhood product pass
+// a `fromPapi` chain to, so a descriptor change that breaks any of them fails here.
+type PaseoSatisfiesGameSeatContract = Assert<PaseoClient extends GameSeatChain ? true : false>;
+type PreviewnetSatisfiesGameSeatContract = Assert<
+    PreviewnetClient extends GameSeatChain ? true : false
+>;
+type PaseoSatisfiesSeatBindContract = Assert<PaseoClient extends GameSeatBindChain ? true : false>;
+type PreviewnetSatisfiesSeatBindContract = Assert<
+    PreviewnetClient extends GameSeatBindChain ? true : false
+>;
+type PaseoSatisfiesRegistrationContract = Assert<
+    PaseoClient extends GameRegistrationChain ? true : false
+>;
+type PreviewnetSatisfiesRegistrationContract = Assert<
+    PreviewnetClient extends GameRegistrationChain ? true : false
+>;
+type FromPapiSatisfiesRegistrationContract = Assert<
+    PapiIndividualityChain<
+        PaseoClient["individuality"],
+        PaseoClient["raw"]["individuality"]
+    > extends GameRegistrationChain
+        ? true
+        : false
+>;
+type DevnetPredatesRegistration = Assert<DevnetClient extends GameRegistrationChain ? false : true>;
+type RejectsBogusRegistrationClient = Assert<
+    ClientWithoutIndividuality extends GameRegistrationChain ? false : true
 >;
 
 // Pinned by name for the same reason `sign_up_with_account`'s are: PAPI encodes

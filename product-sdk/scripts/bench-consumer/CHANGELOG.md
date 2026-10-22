@@ -1,21 +1,270 @@
 # @parity/product-sdk-bench-consumer
 
+## 0.0.47
+
+### Patch Changes
+
+- Updated dependencies [e9bfd25]
+  - @parity/product-sdk@0.40.0
+  - @parity/product-sdk-host@0.29.0
+  - @parity/product-sdk-chain-client@0.13.4
+  - @parity/product-sdk-cloud-storage@0.13.4
+  - @parity/product-sdk-local-storage@0.3.20
+  - @parity/product-sdk-signer@0.17.4
+  - @parity/product-sdk-statement-store@0.7.4
+  - @parity/product-sdk-terminal@0.13.4
+  - @parity/product-sdk-keys@0.5.4
+  - @parity/product-sdk-contracts@0.11.4
+  - @parity/product-sdk-tx@0.5.4
+
+## 0.0.46
+
+### Patch Changes
+
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+  - @parity/product-sdk-host@0.28.0
+  - @parity/product-sdk@0.39.0
+  - @parity/product-sdk-chain-client@0.13.3
+  - @parity/product-sdk-cloud-storage@0.13.3
+  - @parity/product-sdk-local-storage@0.3.19
+  - @parity/product-sdk-signer@0.17.3
+  - @parity/product-sdk-statement-store@0.7.3
+  - @parity/product-sdk-terminal@0.13.3
+  - @parity/product-sdk-keys@0.5.3
+  - @parity/product-sdk-contracts@0.11.3
+  - @parity/product-sdk-tx@0.5.3
+
+## 0.0.45
+
+### Patch Changes
+
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+  - @parity/product-sdk-contracts@0.11.2
+  - @parity/product-sdk-address@0.3.1
+  - @parity/product-sdk-keys@0.5.2
+  - @parity/product-sdk-host@0.27.1
+  - @parity/product-sdk@0.38.0
+  - @parity/product-sdk-statement-store@0.7.2
+  - @parity/product-sdk-terminal@0.13.2
+  - @parity/product-sdk-signer@0.17.2
+  - @parity/product-sdk-tx@0.5.2
+  - @parity/product-sdk-chain-client@0.13.2
+  - @parity/product-sdk-cloud-storage@0.13.2
+  - @parity/product-sdk-local-storage@0.3.18
+
+## 0.0.44
+
+### Patch Changes
+
+- Updated dependencies [d076015]
+- Updated dependencies [d076015]
+  - @parity/product-sdk-host@0.27.0
+  - @parity/product-sdk@0.37.0
+  - @parity/product-sdk-cloud-storage@0.13.1
+  - @parity/product-sdk-chain-client@0.13.1
+  - @parity/product-sdk-local-storage@0.3.17
+  - @parity/product-sdk-signer@0.17.1
+  - @parity/product-sdk-statement-store@0.7.1
+  - @parity/product-sdk-terminal@0.13.1
+  - @parity/product-sdk-keys@0.5.1
+  - @parity/product-sdk-contracts@0.11.1
+  - @parity/product-sdk-tx@0.5.1
+
+## 0.0.43
+
+### Patch Changes
+
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+  - @parity/product-sdk-descriptors@0.14.0
+  - @parity/product-sdk@0.36.0
+  - @parity/product-sdk-host@0.26.0
+  - @parity/product-sdk-logger@0.1.2
+  - @parity/product-sdk-address@0.3.0
+  - @parity/product-sdk-chain-client@0.13.0
+  - @parity/product-sdk-cloud-storage@0.13.0
+  - @parity/product-sdk-contracts@0.11.0
+  - @parity/product-sdk-keys@0.5.0
+  - @parity/product-sdk-signer@0.17.0
+  - @parity/product-sdk-statement-store@0.7.0
+  - @parity/product-sdk-terminal@0.13.0
+  - @parity/product-sdk-tx@0.5.0
+  - @parity/product-sdk-local-storage@0.3.16
+  - @parity/product-sdk-utils@0.2.1
+
+## 0.0.42
+
+### Patch Changes
+
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+- Updated dependencies [133451f]
+  - @parity/product-sdk@0.35.0
+  - @parity/product-sdk-signer@0.16.2
+  - @parity/product-sdk-statement-store@0.6.16
+  - @parity/product-sdk-terminal@0.12.0
+  - @parity/product-sdk-contracts@0.10.14
+
+## 0.0.41
+
+### Patch Changes
+
+- Updated dependencies [a1e1f72]
+  - @parity/product-sdk@0.34.0
+  - @parity/product-sdk-host@0.25.0
+  - @parity/product-sdk-chain-client@0.12.10
+  - @parity/product-sdk-cloud-storage@0.12.6
+  - @parity/product-sdk-local-storage@0.3.15
+  - @parity/product-sdk-signer@0.16.1
+  - @parity/product-sdk-statement-store@0.6.15
+  - @parity/product-sdk-keys@0.4.3
+  - @parity/product-sdk-contracts@0.10.13
+  - @parity/product-sdk-terminal@0.11.1
+  - @parity/product-sdk-tx@0.4.13
+
+## 0.0.40
+
+### Patch Changes
+
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+  - @parity/product-sdk-host@0.24.0
+  - @parity/product-sdk@0.33.0
+  - @parity/product-sdk-signer@0.16.0
+  - @parity/product-sdk-terminal@0.11.0
+  - @parity/product-sdk-chain-client@0.12.9
+  - @parity/product-sdk-cloud-storage@0.12.5
+  - @parity/product-sdk-local-storage@0.3.14
+  - @parity/product-sdk-statement-store@0.6.14
+  - @parity/product-sdk-contracts@0.10.12
+  - @parity/product-sdk-keys@0.4.2
+  - @parity/product-sdk-tx@0.4.12
+
+## 0.0.39
+
+### Patch Changes
+
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+- Updated dependencies [41d7ee8]
+  - @parity/product-sdk-chain-client@0.12.8
+  - @parity/product-sdk-descriptors@0.13.0
+  - @parity/product-sdk@0.32.0
+  - @parity/product-sdk-cloud-storage@0.12.4
+
+## 0.0.38
+
+### Patch Changes
+
+- Updated dependencies [206f791]
+  - @parity/product-sdk@0.31.0
+  - @parity/product-sdk-host@0.23.0
+  - @parity/product-sdk-chain-client@0.12.7
+  - @parity/product-sdk-cloud-storage@0.12.3
+  - @parity/product-sdk-local-storage@0.3.13
+  - @parity/product-sdk-signer@0.15.1
+  - @parity/product-sdk-statement-store@0.6.13
+  - @parity/product-sdk-keys@0.4.1
+  - @parity/product-sdk-contracts@0.10.11
+  - @parity/product-sdk-terminal@0.10.1
+  - @parity/product-sdk-tx@0.4.11
+
+## 0.0.37
+
+### Patch Changes
+
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+  - @parity/product-sdk@0.30.0
+  - @parity/product-sdk-host@0.22.0
+  - @parity/product-sdk-keys@0.4.0
+  - @parity/product-sdk-terminal@0.10.0
+  - @parity/product-sdk-utils@0.2.0
+  - @parity/product-sdk-signer@0.15.0
+  - @parity/product-sdk-chain-client@0.12.6
+  - @parity/product-sdk-cloud-storage@0.12.2
+  - @parity/product-sdk-local-storage@0.3.12
+  - @parity/product-sdk-statement-store@0.6.12
+  - @parity/product-sdk-contracts@0.10.10
+  - @parity/product-sdk-tx@0.4.10
+
+## 0.0.36
+
+### Patch Changes
+
+- Updated dependencies [8675e6c]
+  - @parity/product-sdk@0.29.0
+  - @parity/product-sdk-host@0.21.0
+  - @parity/product-sdk-chain-client@0.12.5
+  - @parity/product-sdk-cloud-storage@0.12.1
+  - @parity/product-sdk-local-storage@0.3.11
+  - @parity/product-sdk-signer@0.14.6
+  - @parity/product-sdk-statement-store@0.6.11
+  - @parity/product-sdk-keys@0.3.26
+  - @parity/product-sdk-contracts@0.10.9
+  - @parity/product-sdk-terminal@0.9.1
+  - @parity/product-sdk-tx@0.4.9
+
 ## 0.0.35
 
 ### Patch Changes
 
-- Updated dependencies
-- Updated dependencies
-- Updated dependencies
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
+- Updated dependencies [a85b489]
   - @parity/product-sdk-terminal@0.9.0
-  - @parity/product-sdk-keys@0.4.0
-  - @parity/product-sdk-utils@0.2.0
+  - @parity/product-sdk-descriptors@0.12.0
+  - @parity/product-sdk-cloud-storage@0.12.0
   - @parity/product-sdk@0.28.0
-  - @parity/product-sdk-contracts@0.10.8
+  - @parity/product-sdk-host@0.20.0
+  - @parity/product-sdk-chain-client@0.12.4
+  - @parity/product-sdk-local-storage@0.3.10
   - @parity/product-sdk-signer@0.14.5
-  - @parity/product-sdk-tx@0.4.8
   - @parity/product-sdk-statement-store@0.6.10
-  - @parity/product-sdk-cloud-storage@0.11.4
+  - @parity/product-sdk-keys@0.3.25
+  - @parity/product-sdk-contracts@0.10.8
+  - @parity/product-sdk-tx@0.4.8
 
 ## 0.0.34
 

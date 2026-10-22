@@ -1,11 +1,145 @@
 # @parity/product-sdk-signer
 
+## 0.17.4
+
+### Patch Changes
+
+- Updated dependencies [e9bfd25]
+  - @parity/product-sdk-host@0.29.0
+  - @parity/product-sdk-keys@0.5.4
+
+## 0.17.3
+
+### Patch Changes
+
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+- Updated dependencies [45dc779]
+  - @parity/product-sdk-host@0.28.0
+  - @parity/product-sdk-keys@0.5.3
+
+## 0.17.2
+
+### Patch Changes
+
+- Updated dependencies [c712386]
+- Updated dependencies [c712386]
+  - @parity/product-sdk-address@0.3.1
+  - @parity/product-sdk-keys@0.5.2
+  - @parity/product-sdk-host@0.27.1
+
+## 0.17.1
+
+### Patch Changes
+
+- Updated dependencies [d076015]
+  - @parity/product-sdk-host@0.27.0
+  - @parity/product-sdk-keys@0.5.1
+
+## 0.17.0
+
+### Minor Changes
+
+- dde3b0d: **Moves the SDK to polkadot-api 3.** Breaking for every caller that signs.
+
+  PAPI 3 replaced the `PolkadotSigner` with a `TxCreator`, which receives one payload holding the call, every transaction extension, the pipeline version those extensions belong to, and the runtime metadata. Every signer the SDK builds or accepts is now a `CommonSignerTxCreator` from `@polkadot-api/signers-common`: `getProductAccountSigner` and `getLegacyAccountSigner` in host, `SignerManager.getSigner`, `seedToAccount` and the key manager in keys, `createDevSigner` in tx, the session, slot-account and allowance signers in terminal, and the signers `resolveSigner` returns in auth. `submitAndWatch`, `batchSubmitAndWatch` and contract calls take it unchanged. A PAPI transaction is now submitted with `createSubmitAndWatch` or `createAndSubmit`, fees are estimated with a creator such as `getFakeTxCreator(address)`, and the transaction events `signed` and `txBestBlocksState` are now `created`, `inBestBlock` and `notInBestBlock`. The `TxEvent` type in tx follows.
+
+  `withAsPerson`, `withLiteAlias` and `withScoreParticipant` now wrap a `TxCreator`. They fill the standard extensions with the PAPI 3 enhancers, write their origin extension, and hand the inner signer the pipeline version that carries it, so the host is told the version the proof was built for instead of inferring one. This replaces the slot filling that worked around PAPI 2 only knowing pipeline version 0. A fee estimate through a wrapper is priced as a plain account transaction and never requests a proof.
+
+  Host exports `createHostTxCreator`, also published as the transport-free subpath `@parity/product-sdk-host/tx-creator`, which terminal uses for the paired-phone signer. The `txExtVersion` signer option is now the version used when the transaction names none.
+
+  Terminal moves to `@novasamatech/host-papp`, `statement-store` and `storage-adapter` 0.12.0, and host to `@novasamatech/host-api-wrapper` 0.12.0, the releases built for PAPI 3. `@novasamatech/statement-store` 0.12.0 still depends on `@novasamatech/sdk-statement` 0.6.0, which pulls a private copy of polkadot-api 2 into the install. The descriptors are regenerated with the PAPI 3 CLI.
+
+  Cloud Storage keeps working with `@parity/bulletin-sdk` 0.3.0 through a shim that maps its `signSubmitAndWatch` onto `createSubmitAndWatch`, to be removed when a PAPI 3 build ships.
+
+  The `paseo-asset-hub` and `previewnet-asset-hub` descriptors follow `next-asset-hub-paseo` 3004000, and `previewnet-asset-hub` takes the new genesis of the reset Previewnet Asset Hub. That runtime drops the `Result` wrapper from `ScarcityApi.metadata_batch` and `NftClaimsApi.preview_mints`, which now return their list directly and reject an oversized batch at decode (128 queries for `metadata_batch`, 32 for `preview_mints` on `next-asset-hub-paseo` 3004000). `NftsChain` and `NftsInstancesChain` follow, so a hand-built chain answers those calls with a bare list. `getInstanceDisplays` no longer re-chunks on a `TooLarge` refusal, and `previewClaim` sends one `preview_mints` call per 32 collections, the bound the runtime enforces.
+
+  Every nfts read now holds the blocks it pins until it settles, through the optional `hodlBlock` that `BlockSource` gains and a PAPI client already has. A finalized block was unpinned as soon as a newer one was finalized, so a read that spanned that moment failed inside a container with "is not pinned", because the host serves no archive methods to fall back to.
+
+### Patch Changes
+
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+- Updated dependencies [dde3b0d]
+  - @parity/product-sdk-host@0.26.0
+  - @parity/product-sdk-logger@0.1.2
+  - @parity/product-sdk-address@0.3.0
+  - @parity/product-sdk-keys@0.5.0
+
+## 0.16.2
+
+### Patch Changes
+
+- 133451f: A host error whose payload is a plain object no longer reads `[object Object]`. `formatError`, which builds the message of every `Host rejected … request` error and the `failed to get product account` log line, now serializes an object payload as JSON (bigints as decimal strings; byte arrays as hex, long ones cut to their first 64 bytes; a nested `Error` with its name, message, cause and own fields such as `code` and `data`; an object met twice as `[repeated]`, which also cuts cycles; elided past 500 characters) and shows a `{ reason }` payload under a tag as its reason. A product-account rejection that logged `Domain → V1 → Unknown ([object Object])` now carries the host's payload.
+
+## 0.16.1
+
+### Patch Changes
+
+- Updated dependencies [a1e1f72]
+  - @parity/product-sdk-host@0.25.0
+  - @parity/product-sdk-keys@0.4.3
+
+## 0.16.0
+
+### Minor Changes
+
+- df6b2c0: Host and terminal signer factories accept an optional `txExtVersion`, defaulting to `0`. It names the transaction extension version used to encode the supplied extensions; the host or paired wallet chooses V4 or V5 from it and the runtime metadata. Setting another version forwards it unchanged without re-encoding the extension bytes.
+
+### Patch Changes
+
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+- Updated dependencies [df6b2c0]
+  - @parity/product-sdk-host@0.24.0
+  - @parity/product-sdk-keys@0.4.2
+
+## 0.15.1
+
+### Patch Changes
+
+- Updated dependencies [206f791]
+  - @parity/product-sdk-host@0.23.0
+  - @parity/product-sdk-keys@0.4.1
+
+## 0.15.0
+
+### Minor Changes
+
+- a0fcb48: **`connect()` no longer reports success with no accounts after a recoverable failure.** The two branches that fetch a product account now classify failures the same way. The `productAccount` branch already degraded to an empty account list only for a non-transient rejection and returned anything else for the retry loop; the `dappName` branch — the one a default `SignerManager` takes — degraded on _any_ failure, so a timeout was indistinguishable from an unregistered identifier and `connect()` resolved `ok([])` with nothing to prompt another attempt. Both now share one classifier.
+
+  **`NotConnected` is retried before it degrades.** The host returns that tag both for a signed-out user and for a session that is being re-established — after a host account switch, the core re-mints it, and a product account queried in that window is refused. The two are indistinguishable, so the tag is now retried and degrades to read-only only once the attempts are spent. A signed-out user reaches the same empty-accounts state as before, a retry cycle later; an in-flight re-mint recovers instead of leaving the product connected with no accounts.
+
+  Consumers passing `dappName` who relied on `connect()` always resolving should note it can now return an error for an unclassified host failure, after `maxRetries` attempts.
+
+### Patch Changes
+
+- a0fcb48: **A denied `ChainSubmit` permission is now logged at `warn`.** `HostProvider.connect()` requests `ChainSubmit` up front and, by design, never fails `connect()` on the outcome — the consumer can still use read-only paths, and the first sign call surfaces a clear error. But that meant a denial, which guarantees every later sign call fails with `PermissionDenied`, was only ever logged at `debug`, invisible at the default `warn` level. A grant still logs at `debug`; a denial now logs at `warn`. No API changed — `connect()`'s contract and the thrown-request `catch` path are untouched.
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+- Updated dependencies [a0fcb48]
+  - @parity/product-sdk-host@0.22.0
+  - @parity/product-sdk-keys@0.4.0
+
+## 0.14.6
+
+### Patch Changes
+
+- Updated dependencies [8675e6c]
+  - @parity/product-sdk-host@0.21.0
+  - @parity/product-sdk-keys@0.3.26
+
 ## 0.14.5
 
 ### Patch Changes
 
-- Updated dependencies
-  - @parity/product-sdk-keys@0.4.0
+- Updated dependencies [a85b489]
+  - @parity/product-sdk-host@0.20.0
+  - @parity/product-sdk-keys@0.3.25
 
 ## 0.14.4
 
