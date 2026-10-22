@@ -36,7 +36,7 @@ import type {
     PersonhoodResult,
 } from "./types.js";
 
-import type { ReadAt } from "./pinned.js";
+import { readRepinning, type ReadAt } from "./pinned.js";
 
 /** `AccountToAlias`, narrowed to the contextual alias the read keys on. */
 export interface RawAccountAlias {
@@ -253,7 +253,6 @@ async function runRead(
     options: ReadPersonhoodStateOptions,
 ): Promise<PersonhoodResult> {
     const { signal } = options;
-    const query = chain.individuality.query;
 
     // Neither an unusable call nor an already cancelled one should pin a block. The
     // fetch below takes no options, so it cannot carry the signal itself.
@@ -261,9 +260,24 @@ async function runRead(
     signal?.throwIfAborted();
 
     // Pin one finalized block: every read below must agree on it.
-    const block = await chain.raw.individuality.getFinalizedBlock();
-    const at: ReadAt = { at: block.hash, signal };
-    const snapshot: FinalizedSnapshot = { blockHash: block.hash, blockNumber: block.number };
+    const pinFinalized = async (): Promise<FinalizedSnapshot> => {
+        const block = await chain.raw.individuality.getFinalizedBlock();
+        return { blockHash: block.hash, blockNumber: block.number };
+    };
+    return readRepinning(pinFinalized, (snapshot) =>
+        readPersonhoodAt(chain, input, snapshot, signal),
+    );
+}
+
+/** The reads of {@link readPersonhoodState}, all at `snapshot`. */
+async function readPersonhoodAt(
+    chain: IndividualityChain,
+    input: ReadInput,
+    snapshot: FinalizedSnapshot,
+    signal: AbortSignal | undefined,
+): Promise<PersonhoodResult> {
+    const query = chain.individuality.query;
+    const at: ReadAt = { at: snapshot.blockHash, signal };
 
     // An account input *skips* the username lookup rather than adding a read to
     // it, which is why the account path costs one round trip less.
@@ -349,6 +363,7 @@ async function runRead(
             policy,
         }),
         metrics,
+        participant,
     };
 }
 
@@ -372,6 +387,7 @@ if (import.meta.vitest) {
         streak: { type: "Attended", value: 4 },
         attendance_history: 0xff,
         reached_personhood: true,
+        has_ever_reached_personhood: true,
         recognition: { type: "Recognized", value: 5n },
         last_attended_game: 42,
         ...overrides,
@@ -531,12 +547,14 @@ if (import.meta.vitest) {
                     score: 7,
                     recognition: { type: "NotRecognized" },
                     reached_personhood: false,
+                    has_ever_reached_personhood: false,
                 }),
                 alias: { ca: { alias: ALIAS } },
                 personParticipant: raw({
                     score: 99,
                     recognition: { type: "NotRecognized" },
                     reached_personhood: false,
+                    has_ever_reached_personhood: false,
                 }),
             });
             const result = await readPersonhoodState(chain, { username: "alice.dot" });
@@ -777,6 +795,31 @@ if (import.meta.vitest) {
             });
         });
 
+        test("carries the decoded record the state was derived from", async () => {
+            const { chain } = fakeChain({
+                owner: ALICE,
+                accountParticipant: raw({ last_attended_game: 99, reached_personhood: false }),
+            });
+            const result = unwrapOk(await readPersonhoodState(chain, { username: "alice.dot" }));
+            if (result.tag !== "Resolved") throw new Error("expected Resolved");
+            expect(result.participant).toEqual({
+                score: 7,
+                streak: { tag: "Attended", count: 4 },
+                attendanceHistory: 0xff,
+                reachedPersonhood: false,
+                hasEverReachedPersonhood: true,
+                recognition: "Recognized",
+                lastAttendedGame: 99,
+            });
+        });
+
+        test("carries a null record when the account has none", async () => {
+            const { chain } = fakeChain({ owner: ALICE });
+            const result = unwrapOk(await readPersonhoodState(chain, { username: "alice.dot" }));
+            if (result.tag !== "Resolved") throw new Error("expected Resolved");
+            expect(result.participant).toBeNull();
+        });
+
         test("metrics.misses counts the window now; Caution.misses projects one more absence", async () => {
             // 0b11001111: two absences inside the window today. Shifting one
             // more in leaves three, which is what the policy is evaluated
@@ -835,6 +878,7 @@ if (import.meta.vitest) {
                         score: 4,
                         recognition: { type: "NotRecognized" },
                         reached_personhood: false,
+                        has_ever_reached_personhood: false,
                     }),
                 }).chain,
                 { username: "alice.dot" },

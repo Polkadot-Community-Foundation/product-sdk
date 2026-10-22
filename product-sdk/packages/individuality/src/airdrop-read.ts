@@ -28,8 +28,8 @@ import type {
     AirdropRegistrant,
 } from "./airdrop-types.js";
 import { ProductIndividualityError } from "./errors.js";
-import { pinBlock, readAt, type PinnedChain, type ReadAt } from "./pinned.js";
-import type { FinalizedSnapshot } from "./types.js";
+import { readAt, readPinned, type PinnedChain, type ReadAt } from "./pinned.js";
+import type { BlockAt, FinalizedSnapshot } from "./types.js";
 
 /**
  * Structural, so a test double satisfies it. See `IndividualityChain` in `read.ts`
@@ -105,6 +105,12 @@ export interface ReadAirdropDrawOptions {
      */
     registrant?: AirdropRegistrant;
     /**
+     * The block to read at, as PAPI's `at`: `"finalized"`, the default, `"best"`
+     * to follow a best-block watch without waiting for finality, or a snapshot
+     * another read already pinned.
+     */
+    at?: BlockAt;
+    /**
      * Forwarded into every underlying pull, so an aborted caller stops the whole
      * batch. No deadline is applied here — that belongs to the caller.
      */
@@ -121,7 +127,7 @@ export async function readAirdropDraw(
     options: ReadAirdropDrawOptions,
 ): Promise<Result<AirdropDraw, ProductIndividualityError>> {
     try {
-        return ok(await runDrawRead(chain, options));
+        return ok(await runDrawRead(chain, options, options.at));
     } catch (cause) {
         // normalizeError passes an existing package error through unchanged, so
         // callers can still narrow with isErrorOf.
@@ -137,36 +143,37 @@ export async function readAirdropDraw(
 export async function runDrawRead(
     chain: AirdropChain,
     options: ReadAirdropDrawOptions,
-    pinned?: FinalizedSnapshot,
+    pinned?: BlockAt,
 ): Promise<AirdropDraw> {
     const { eventId, registrant, signal } = options;
     const query = chain.individuality.query.Airdrop;
 
-    const snapshot = await pinBlock(chain, signal, pinned);
-    const at: ReadAt = readAt(snapshot, signal);
+    return readPinned(chain, signal, pinned, async (snapshot) => {
+        const at: ReadAt = readAt(snapshot, signal);
 
-    // One round trip, three entries, one block. The winner lookup is a point
-    // read rather than a scan because `Winners` hashes the registration entry —
-    // which is why an identity is all it takes.
-    const [rawEvent, ticket, entropy] = await Promise.all([
-        query.Events.getValue(eventId, at),
-        registrant === undefined
-            ? Promise.resolve(undefined)
-            : query.Winners.getValue(eventId, toRawRegistrationEntry(registrant), at),
-        query.EventEntropy.getValue(eventId, at),
-    ]);
+        // All three entries are read at the same block in one round trip. `Winners`
+        // is keyed by the registration entry, so checking whether this registrant
+        // won is a single lookup, not a scan of every winner.
+        const [rawEvent, ticket, entropy] = await Promise.all([
+            query.Events.getValue(eventId, at),
+            registrant === undefined
+                ? Promise.resolve(undefined)
+                : query.Winners.getValue(eventId, toRawRegistrationEntry(registrant), at),
+            query.EventEntropy.getValue(eventId, at),
+        ]);
 
-    const event = rawEvent === undefined ? null : toAirdropEvent(eventId, rawEvent);
+        const event = rawEvent === undefined ? null : toAirdropEvent(eventId, rawEvent);
 
-    return {
-        at: snapshot,
-        eventId,
-        // "Gone" is the absence of the row, not a status the chain reports.
-        phase: event?.phase ?? "Gone",
-        event,
-        outcome: toOutcome(registrant, ticket),
-        entropy: entropy ?? null,
-    };
+        return {
+            at: snapshot,
+            eventId,
+            // "Gone" is the absence of the row, not a status the chain reports.
+            phase: event?.phase ?? "Gone",
+            event,
+            outcome: toOutcome(registrant, ticket),
+            entropy: entropy ?? null,
+        };
+    });
 }
 
 function toOutcome(
@@ -208,8 +215,19 @@ export async function readDrawRegistration(
     options: { eventId: string; registrant: AirdropRegistrant; signal?: AbortSignal },
 ): Promise<Result<DrawRegistration, ProductIndividualityError>> {
     try {
-        const { eventId, registrant, signal } = options;
-        const snapshot = await pinBlock(chain, signal);
+        return ok(await runDrawRegistrationRead(chain, options));
+    } catch (cause) {
+        return err(normalizeError(cause, ProductIndividualityError));
+    }
+}
+
+/** Throws; {@link readDrawRegistration} owns the `Result` boundary. */
+async function runDrawRegistrationRead(
+    chain: AirdropChain,
+    options: { eventId: string; registrant: AirdropRegistrant; signal?: AbortSignal },
+): Promise<DrawRegistration> {
+    const { eventId, registrant, signal } = options;
+    return readPinned(chain, signal, undefined, async (snapshot) => {
         const entries = await chain.individuality.query.Airdrop.Registrations.getEntries(
             eventId,
             readAt(snapshot, signal),
@@ -221,16 +239,14 @@ export async function readDrawRegistration(
         const matches = matcherFor(toRawRegistrationEntry(registrant));
         const match = entries.find(matches);
 
-        return ok({
+        return {
             at: snapshot,
             eventId,
             // keyArgs is [eventId, slot], so the slot is the second key.
             slot: match?.keyArgs[1] ?? null,
             entriesScanned: entries.length,
-        });
-    } catch (cause) {
-        return err(normalizeError(cause, ProductIndividualityError));
-    }
+        };
+    });
 }
 
 /**
@@ -424,6 +440,7 @@ if (import.meta.vitest) {
                         boom("block");
                         return BLOCK;
                     },
+                    getBestBlocks: async () => [BLOCK],
                 },
             },
         };
@@ -454,6 +471,20 @@ if (import.meta.vitest) {
             expect(calls).toHaveLength(3);
             // The whole reason the block is pinned: three entries, one block.
             expect(new Set(calls.map((call) => call.at))).toEqual(new Set([BLOCK.hash]));
+        });
+
+        test("reads every entry at the block it is given", async () => {
+            const { chain, calls } = fakeChain({ event: rawEvent(), entropy: ENTROPY });
+            const given = { blockHash: `0x${"bb".repeat(32)}`, blockNumber: 43 };
+            const draw = unwrapOk(
+                await readAirdropDraw(chain, {
+                    eventId: EVENT_ID,
+                    registrant: { tag: "Account", accountAddress: ALICE },
+                    at: given,
+                }),
+            );
+            expect(draw.at).toBe(given);
+            expect(new Set(calls.map((call) => call.at))).toEqual(new Set([given.blockHash]));
         });
 
         test("addresses every read with the event id it was given", async () => {

@@ -1,5 +1,126 @@
 # @parity/product-sdk-descriptors
 
+## 0.14.0
+
+### Minor Changes
+
+- dde3b0d: Re-pin `paseo-individuality` and `previewnet-individuality` to the People runtime now live on both chains (`next-people-paseo` 3004000, code hash `0x69e7126f…7871`). The genesis hashes are unchanged.
+
+  What moved in the pallets products read: `Airdrop.EventInfo` gained `product_name` (so `Airdrop.Events` and `schedule_event` changed shape, with a new `InvalidProductName` error); `Game` gained the `product_name` constant and a `CreditCapacityExhausted` error; `Members` gained `RetiredIdentifiers` and `IdentifierRetired`; `NftCredits` keys awards by `(block, index)` with expiry sweeps and its runtime API arguments are named `tree_block`; the `SkipFeelessPayment` pallet is gone; `AuthorizedAliasersApi` and `TrustedQueryApi` were added. `PeopleLite`, `People`, `Score`, `Coinage` and `PeopleAirdrops` are unchanged in shape.
+
+  The runtime also declares two transaction-extension pipelines now, version 0 (plain, what a signed V4 extrinsic uses) and version 1 (the origin extensions); `@parity/product-sdk-individuality` reads the right one from this release on.
+
+- dde3b0d: **Moves the SDK to polkadot-api 3.** Breaking for every caller that signs.
+
+  PAPI 3 replaced the `PolkadotSigner` with a `TxCreator`, which receives one payload holding the call, every transaction extension, the pipeline version those extensions belong to, and the runtime metadata. Every signer the SDK builds or accepts is now a `CommonSignerTxCreator` from `@polkadot-api/signers-common`: `getProductAccountSigner` and `getLegacyAccountSigner` in host, `SignerManager.getSigner`, `seedToAccount` and the key manager in keys, `createDevSigner` in tx, the session, slot-account and allowance signers in terminal, and the signers `resolveSigner` returns in auth. `submitAndWatch`, `batchSubmitAndWatch` and contract calls take it unchanged. A PAPI transaction is now submitted with `createSubmitAndWatch` or `createAndSubmit`, fees are estimated with a creator such as `getFakeTxCreator(address)`, and the transaction events `signed` and `txBestBlocksState` are now `created`, `inBestBlock` and `notInBestBlock`. The `TxEvent` type in tx follows.
+
+  `withAsPerson`, `withLiteAlias` and `withScoreParticipant` now wrap a `TxCreator`. They fill the standard extensions with the PAPI 3 enhancers, write their origin extension, and hand the inner signer the pipeline version that carries it, so the host is told the version the proof was built for instead of inferring one. This replaces the slot filling that worked around PAPI 2 only knowing pipeline version 0. A fee estimate through a wrapper is priced as a plain account transaction and never requests a proof.
+
+  Host exports `createHostTxCreator`, also published as the transport-free subpath `@parity/product-sdk-host/tx-creator`, which terminal uses for the paired-phone signer. The `txExtVersion` signer option is now the version used when the transaction names none.
+
+  Terminal moves to `@novasamatech/host-papp`, `statement-store` and `storage-adapter` 0.12.0, and host to `@novasamatech/host-api-wrapper` 0.12.0, the releases built for PAPI 3. `@novasamatech/statement-store` 0.12.0 still depends on `@novasamatech/sdk-statement` 0.6.0, which pulls a private copy of polkadot-api 2 into the install. The descriptors are regenerated with the PAPI 3 CLI.
+
+  Cloud Storage keeps working with `@parity/bulletin-sdk` 0.3.0 through a shim that maps its `signSubmitAndWatch` onto `createSubmitAndWatch`, to be removed when a PAPI 3 build ships.
+
+  The `paseo-asset-hub` and `previewnet-asset-hub` descriptors follow `next-asset-hub-paseo` 3004000, and `previewnet-asset-hub` takes the new genesis of the reset Previewnet Asset Hub. That runtime drops the `Result` wrapper from `ScarcityApi.metadata_batch` and `NftClaimsApi.preview_mints`, which now return their list directly and reject an oversized batch at decode (128 queries for `metadata_batch`, 32 for `preview_mints` on `next-asset-hub-paseo` 3004000). `NftsChain` and `NftsInstancesChain` follow, so a hand-built chain answers those calls with a bare list. `getInstanceDisplays` no longer re-chunks on a `TooLarge` refusal, and `previewClaim` sends one `preview_mints` call per 32 collections, the bound the runtime enforces.
+
+  Every nfts read now holds the blocks it pins until it settles, through the optional `hodlBlock` that `BlockSource` gains and a PAPI client already has. A finalized block was unpinned as soon as a newer one was finalized, so a read that spanned that moment failed inside a container with "is not pinned", because the host serves no archive methods to fall back to.
+
+## 0.13.0
+
+### Minor Changes
+
+- 41d7ee8: **Re-pin the Paseo Asset Hub and Paseo individuality descriptors against the live 3003000 runtimes.**
+
+  Both chains upgraded, so the bundled metadata no longer matched them. The genesis hashes are
+  unchanged, so connections keep working. What changed is what the descriptors can decode.
+
+  Two changes break direct descriptor users, and neither affects a caller that goes through
+  `@parity/product-sdk-nfts`, which was updated in the same release.
+
+  `NftCredits.NftClaimCreditAwards` on the People chain is now keyed `(block, chunk)` rather than
+  by block, with at most `CHUNKS_PER_TREE` chunks a block. A read by block alone no longer
+  compiles.
+
+  `NftClaims.ClaimedCredits` on Asset Hub is gone. Its replacement is `NftClaims.ClaimedLeaves`,
+  one bitmap per tree block with bit `leaf_index` set for each claimed leaf, least significant bit
+  first. The bitmap outlives the tree, so a claim still reads as claimed after the tree is swept.
+
+  New in the Asset Hub descriptor and read by the nfts package: `NftClaimsApi.preview_mints`.
+
+- 41d7ee8: **Re-pin `paseo-individuality` and `previewnet-individuality` to spec 3003000 (#242).**
+
+  Both chains now pin codeHash `0x90d0e268…43744`. Previewnet was also re-genesised, from `0xf720c28f…35218` to `0x55e3e689…249e9`, so the previous descriptor fails to connect to it with `GenesisMismatchError`. Paseo keeps genesis `0x4a2b5b73…5ad48`.
+
+  **Minor rather than patch, because surface is removed.** Both chains changed the same way.
+
+  | Kind      | Removed                                                                                                                                                                                                                          | Added                                                                                                                                                           |
+  | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+  | Storage   | `NftCredits.NftClaimCreditAwardBlocks`, `NftCredits.PendingNftClaimCreditRootInfo`                                                                                                                                               | `NftCredits.CreditBuffers`, `NftCredits.CreditBufferCursor`, `NftCredits.RetainedCreditTreeBlocks`, `NftCredits.RootExpiries`, `Coinage.RecyclersUnloadedCount` |
+  | Constants | `NftCredits.MaxCreditsPerBlock`, `NftCredits.MaxRetainedAwardBlocks`, `Coinage.MaxFreeUnloadTokensPerTimePeriod`, `Coinage.UnloadTokenAllowancePerTimePeriodForLitePeople`, `Coinage.UnloadTokenAllowancePerTimePeriodForPeople` | `NftCredits.ClaimsChainTreeTtl`, `NftCredits.MaxRetainedCreditTrees`, `NftCredits.MaxRootsPerSweep`, `NftCredits.MaxTreeDeletionsPerMessage`                    |
+  | Calls     | none                                                                                                                                                                                                                             | `NftCredits.receive_tree_deletions`, `NftCredits.sweep_expired_roots`, `Score.force_set_attendance`                                                             |
+
+  `NftCredits.NftClaimCreditAwards` keeps its name but is now keyed by block and chunk index rather than by block alone, so a read written against the old key no longer typechecks. The `NftCreditsApi` runtime APIs answer the same questions and also serve the Merkle proof a claim needs.
+
+  `@parity/product-sdk-chain-client` needs no entry. It reads `.genesis` off the imported descriptor, so only its in-source test restated the previewnet hash.
+
+## 0.12.0
+
+### Minor Changes
+
+- a85b489: **Re-pin every drifting chain (#242), including five that were re-genesised.**
+
+  The bundled descriptors addressed chains that no longer exist. Access is gated on the genesis
+  hash, so a stale genesis fails at connection with `GenesisMismatchError` before any storage read.
+  A stale `codeHash` only means decoding against an old metadata snapshot; a stale genesis means
+  addressing a chain that is not there.
+
+  | Chain                      | Old genesis        | New genesis        |
+  | -------------------------- | ------------------ | ------------------ |
+  | `paseo-individuality`      | `0x89a63b11…5440f` | `0x4a2b5b73…5ad48` |
+  | `previewnet-individuality` | `0x34999c29…5d220` | `0xf720c28f…35218` |
+  | `paseo-asset-hub`          | `0x23e730eb…a2ca6` | `0x4349b00e…`      |
+  | `previewnet-asset-hub`     | `0x627f5441…29659` | `0xc27c8bf3…`      |
+  | `previewnet-bulletin`      | `0x1144acd2…04e89` | `0xea9158d7…`      |
+
+  `devnet-asset-hub`, `devnet-individuality`, `kusama-asset-hub`, `paseo-bulletin` and
+  `polkadot-asset-hub` kept their genesis and took a fresh `codeHash` only. All eleven chains
+  matched their live runtimes when this was cut; codeHash pins drift on their own schedule, tracked
+  in #242.
+
+  **Minor rather than patch, because surface is removed**, which on 0.x signals a breaking change.
+  Check this before upgrading; a green `pnpm typecheck` here does not clear consumers.
+
+  | Chain                      | Removed                                                 | Added                                                                                    |
+  | -------------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+  | `paseo-individuality`      | pallet `StorageInitialization`, `Score.Suffix` constant | pallets `NetworkSuffix`, `Parameters`, `AssetConversion`, `PoolAssets`, `PeopleAirdrops` |
+  | `previewnet-individuality` | `Score.Suffix` constant                                 | pallet `NetworkSuffix`                                                                   |
+  | `paseo-asset-hub`          | `AsRingAlias` transaction extension                     | pallet `NetworkSuffix`                                                                   |
+  | `previewnet-asset-hub`     | none                                                    | pallet `NetworkSuffix`                                                                   |
+  | `polkadot-asset-hub`       | none                                                    | pallet `Psm`                                                                             |
+
+  Two consequences worth reading if you use the individuality surface.
+
+  **The network suffix moved from a constant to storage on both individuality chains.** Neither
+  publishes `Score.Suffix` any more, so `readScoreContext` and `readLiteSignUpRequirement` now take
+  the `NetworkSuffixChain` overload and read it at a pinned block. A caller-supplied `tld` still wins
+  where you pass one. Previewnet's own suffix changed with it, from `test` to `testnet`, so its
+  `Score.score_context` moved from `0xa02ef8d9…` to `0x643d4ff6…`. Paseo's is unchanged at
+  `0x99f1920e…`. If you derived a context from a hardcoded `test`, it no longer matches previewnet.
+
+  **`paseo-individuality` gained `PeopleAirdrops`.** The airdrop read surface now has a chain that
+  carries the pallet, where before only previewnet did.
+
+  `@parity/product-sdk-cloud-storage` takes a minor because it now addresses a different chain:
+  `CloudStorageNetworks.previewnet.genesisHash` restated the hash by hand and was pointing at a
+  previewnet Bulletin that no longer exists. All three entries now read `.genesis` off the descriptor
+  they already sit beside, so their declared type widens from the literal hash to `` `0x${string}` ``.
+  Assignment is unaffected; only an annotation naming the literal breaks. Do the same with any hash
+  you pinned yourself, since these chains are re-genesised periodically.
+
+  `@parity/product-sdk-chain-client` needs no entry. It reads `.genesis` off the imported descriptor,
+  so only its in-source tests restated the hashes, and its published output is unchanged.
+
 ## 0.11.0
 
 ### Minor Changes
