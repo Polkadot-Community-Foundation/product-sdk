@@ -1,53 +1,29 @@
 #!/usr/bin/env node
 /**
- * rescope-pack.mjs — stage PCF-scoped tarballs of the devnet-carrying
- * product-sdk packages without renaming them in-tree.
+ * rescope-pack.mjs — stage the PCF build of product-sdk-descriptors without
+ * renaming it in-tree.
  *
- * Why: this repo is the PCF fork of paritytech/product-sdk. The packages stay
- * named `@parity/product-sdk-*` in-tree so the tree stays merge-clean with
- * `git merge upstream/main`. But PCF publishes its own build — carrying the
- * `feat/devnet-env` devnet support that is NOT on the @parity npm releases —
- * under its own scope, so the dotns UI + playground-constellation can consume
- * devnet. Mirrors polkadot-app-deploy + cdm-env + browse-sdk rescope-at-pack.
+ * Packages keep their `@parity/*` names in-tree so the fork stays merge-clean
+ * with upstream. The only content PCF ships on top of an @parity release is the
+ * devnet chain metadata, which this fork pins to the live products devnet. Every
+ * other package matches its @parity release, so only the descriptors are
+ * republished:
+ *   @parity/product-sdk-descriptors -> @polkadot-community-foundation/product-sdk-descriptors
  *
- * Eight packages are rescoped — the three that carry the devnet changes / are
- * imported by the consumers, the two zero-dependency leaf packages `host`
- * transitively needs (they are NOT published on the @parity npm scope, so they
- * must also be PCF-scoped for the graph to fully close), `terminal`, which
- * carries the QR-pairing fix (host-papp 0.10.0 / 32-byte X25519 handshake key)
- * that the @parity npm releases do not yet have, and `keys` + `utils`, which
- * carry the RFC-0022 product-account derivation fix (see below):
- *   @parity/product-sdk-descriptors   -> @polkadot-community-foundation/product-sdk-descriptors
- *   @parity/product-sdk-chain-client  -> @polkadot-community-foundation/product-sdk-chain-client
- *   @parity/product-sdk-host          -> @polkadot-community-foundation/product-sdk-host
- *   @parity/product-sdk-errors        -> @polkadot-community-foundation/product-sdk-errors
- *   @parity/result                    -> @polkadot-community-foundation/result   (base name kept, no product-sdk- prefix)
- *   @parity/product-sdk-terminal      -> @polkadot-community-foundation/product-sdk-terminal
- *   @parity/product-sdk-keys          -> @polkadot-community-foundation/product-sdk-keys
- *   @parity/product-sdk-utils         -> @polkadot-community-foundation/product-sdk-utils
- * Every other @parity/* dep left in a rescoped tarball (e.g. product-sdk-logger,
- * truapi) stays @parity and MUST already be published on npm — the script logs
- * each one so CI surfaces any that is not.
+ * Consumers swap it in with a package-manager override, so every @parity package
+ * that imports the descriptors (chain-client, cloud-storage, the umbrella) shares
+ * one copy:
+ *   "@parity/product-sdk-descriptors": "npm:@polkadot-community-foundation/product-sdk-descriptors@0.14.0-pcf.1"
  *
- * WHY `keys` + `utils` are in the set (RFC-0022):
- * `terminal` externalises `@parity/product-sdk-keys` (tsup keeps declared deps
- * out of the bundle), so a rescoped `terminal` tarball that keeps that dep at
- * @parity resolves `deriveProductAccountPublicKey` from the npm release. npm
- * has keys@0.3.24, and `pnpm pack` resolves `workspace:*` to that same 0.3.24 —
- * so the published-version check below goes GREEN while the installed code is
- * the PRE-RFC-0022 implementation with the old 3-arg signature. Calling it with
- * the new 2-arg `(subtreeKey, {tag:"Index"})` shape does not throw; it returns a
- * DIFFERENT, wrong public key. That is precisely the silent-wrong-address defect
- * RFC-0022 fixes, reintroduced by packaging. `keys` in turn needs the new
- * `derivationIndexBytes` from `utils`, which npm's utils@0.1.1 does not export,
- * so `utils` comes along too. Both must leave this fork under the PCF scope for
- * the fix to actually reach a consumer.
+ * The version is the in-tree version plus `-pcf.<PCF_BUILD>`, so a PCF build
+ * never shares a version with the @parity release it differs from. Bump
+ * PCF_BUILD for each publish of the same in-tree version.
  *
  * Assumes the packages are already built (`pnpm build` ran in CI before this).
  * Step 1 uses `pnpm pack` (NOT `npm pack`) so pnpm resolves the `workspace:*`
- * and `catalog:` protocols to concrete versions/ranges. Then we rewrite `name`
- * and rewrite any cross-dependency AMONG the rescoped packages to the new scope,
- * and repack with `npm pack` (deps are concrete by then).
+ * and `catalog:` protocols to concrete versions/ranges. Then we rewrite `name`,
+ * `version` and any cross-dependency AMONG the rescoped packages, and repack
+ * with `npm pack` (deps are concrete by then).
  */
 import { execSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
@@ -62,28 +38,32 @@ const NEW_SCOPE = "@polkadot-community-foundation";
 
 // in-tree package dir -> in-tree @parity name. These are the rescope set; a
 // cross-dependency on any of them (by @parity name) is rewritten to NEW_SCOPE.
-// `errors` + `result` are included so `host`'s (and chain-client's transitive)
-// deps on them resolve to PCF-scoped, published names — they have no @parity
-// npm release. `rescopedName` maps @parity/result -> @polkadot-community-foundation/result
-// (no product-sdk- prefix) and @parity/product-sdk-errors -> .../product-sdk-errors.
 const RESCOPE = {
     descriptors: "@parity/product-sdk-descriptors",
-    "chain-client": "@parity/product-sdk-chain-client",
-    host: "@parity/product-sdk-host",
-    errors: "@parity/product-sdk-errors",
-    result: "@parity/result",
-    terminal: "@parity/product-sdk-terminal",
-    keys: "@parity/product-sdk-keys",
-    utils: "@parity/product-sdk-utils",
-    signer: "@parity/product-sdk-signer",
 };
 const RESCOPE_NAMES = new Set(Object.values(RESCOPE));
+
+const PCF_BUILD = process.env.PCF_BUILD ?? "";
+if (!/^[1-9][0-9]*$/.test(PCF_BUILD)) {
+    throw new Error(`PCF_BUILD must be a positive integer, got "${PCF_BUILD}"`);
+}
+// @parity name -> published version, for the package itself and for any
+// cross-dependency on it.
+const PCF_VERSIONS = Object.fromEntries(
+    Object.entries(RESCOPE).map(([dir, name]) => {
+        const { version } = JSON.parse(readFileSync(join(PKGS_DIR, dir, "package.json"), "utf8"));
+        if (version.includes("-")) {
+            throw new Error(`${name}@${version} is already a prerelease; refusing to append -pcf.${PCF_BUILD}`);
+        }
+        return [name, `${version}-pcf.${PCF_BUILD}`];
+    }),
+);
 const rescopedName = (name) => name.replace(/^@parity\//, `${NEW_SCOPE}/`);
 
 // Rewriting the package.json alone is not enough: the COMPILED code shipped in
-// dist/ still contains `import ... from "@parity/result"` (and the four other
-// rescoped specifiers), which are no longer declared deps of the rescoped
-// package -> a consumer bundler (Rollup/vite) fails to resolve them. So after
+// dist/ can still `import` a rescoped package by its @parity name, which is no
+// longer a declared dep of the rescoped package -> a consumer bundler
+// (Rollup/vite) fails to resolve it. So after
 // packing we also rewrite those specifiers inside the shipped text files.
 //
 // Only the rescoped names are rewritten, and only as WHOLE specifiers: the
@@ -130,20 +110,6 @@ const run = (cmd, cwd) => execSync(cmd, { cwd, stdio: ["ignore", "pipe", "inheri
 if (existsSync(OUT_DIR)) rmSync(OUT_DIR, { recursive: true });
 mkdirSync(OUT_DIR, { recursive: true });
 
-// @parity/* deps deliberately left at @parity because upstream publishes them.
-// This set is DOCUMENTATION of an expected keep, not a bypass: every kept dep is
-// verified against npm at its exact version by the hard gate at the end of this
-// script, whether or not it appears here. It used to be a bypass, which is how
-// terminal 0.9.0 shipped naming signer@0.14.5 — a version upstream never
-// published — and died on install with ETARGET.
-const KNOWN_PUBLISHED_PARITY = new Set([
-    "@parity/product-sdk-logger",
-    "@parity/truapi",
-    "@parity/product-sdk-address",
-    "@parity/product-sdk-crypto",
-    "@parity/product-sdk-local-storage",
-]);
-
 const results = [];
 /** Every @parity dep left un-rescoped, verified against npm before we finish. */
 const keptParityDeps = [];
@@ -161,31 +127,25 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     const pkgJsonPath = join(stage, "package", "package.json");
     const pkg = JSON.parse(readFileSync(pkgJsonPath, "utf8"));
 
-    // Rewrite the package's own name.
+    // Rewrite the package's own name and version.
+    const inTreeVersion = pkg.version;
     pkg.name = rescopedName(upstreamName);
+    pkg.version = PCF_VERSIONS[upstreamName];
 
-    // Rewrite cross-deps AMONG the rescoped packages to the new scope.
-    // Every OTHER @parity/* dep stays @parity (must already be on npm).
+    // Rewrite cross-deps AMONG the rescoped packages to the new scope and
+    // their PCF versions. Every OTHER @parity/* dep stays @parity.
     for (const depField of ["dependencies", "peerDependencies", "optionalDependencies"]) {
         const deps = pkg[depField];
         if (!deps) continue;
         for (const depName of Object.keys(deps)) {
             if (RESCOPE_NAMES.has(depName)) {
-                const version = deps[depName];
                 delete deps[depName];
-                deps[rescopedName(depName)] = version;
+                deps[rescopedName(depName)] = PCF_VERSIONS[depName];
             } else if (depName.startsWith("@parity/")) {
-                // Left at @parity — must already be published on npm. Recorded
-                // for the hard existence check below; membership in
-                // KNOWN_PUBLISHED_PARITY documents an EXPECTED keep, it does not
-                // excuse one from being verified.
+                // Left at @parity, so it must already be published on npm:
+                // recorded for the hard existence check below.
                 console.log(`[rescope-pack]   ${pkg.name} keeps @parity dep ${depName}@${deps[depName]}`);
                 keptParityDeps.push({ consumer: pkg.name, depName, range: deps[depName] });
-                if (!KNOWN_PUBLISHED_PARITY.has(depName)) {
-                    console.log(
-                        `[rescope-pack]   note: ${depName} is not in the known-published @parity set.`,
-                    );
-                }
             }
         }
     }
@@ -199,7 +159,7 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     // Step 1b: rewrite the rescoped specifiers inside the extracted,
     // shipped code (dist/ + any source) so the compiled imports/requires match
     // the rescoped names. Without this the tarball's package.json is PCF-scoped
-    // but its dist code still `import`s `@parity/result` etc. -> unresolvable.
+    // but its dist code still `import`s the @parity names -> unresolvable.
     const rewritten = rewriteDistSpecifiers(join(stage, "package"));
     console.log(`[rescope-pack]   ${pkg.name} rewrote rescoped specifiers in ${rewritten} shipped file(s)`);
 
@@ -208,7 +168,7 @@ for (const [dir, upstreamName] of Object.entries(RESCOPE)) {
     rmSync(stage, { recursive: true, force: true });
 
     results.push({ upstreamName, name: pkg.name, version: pkg.version });
-    console.log(`[rescope-pack] ${upstreamName}@${pkg.version} -> ${pkg.name}@${pkg.version}`);
+    console.log(`[rescope-pack] ${upstreamName}@${inTreeVersion} -> ${pkg.name}@${pkg.version}`);
 }
 
 console.log("\n[rescope-pack] staged tarballs:");
