@@ -3,6 +3,7 @@
 import { deriveH160, ss58Encode } from "@parity/product-sdk-address";
 import {
     getAccountsProvider,
+    type HostSignerOptions,
     type ProductAccountLookup,
     type RegisteredRingVrfKey,
     type RingLocation,
@@ -190,12 +191,15 @@ export interface AccountsProvider {
     getLegacyAccounts: () => NeverthrowResultAsync<RawAccount[], unknown>;
     getLegacyAccountSigner: (account: {
         publicKey: Uint8Array;
-    }) => import("polkadot-api").PolkadotSigner;
+    }) => import("@polkadot-api/signers-common").CommonSignerTxCreator;
     getProductAccount: (
         dotNsIdentifier: string,
         derivationIndex?: number,
     ) => NeverthrowResultAsync<RawAccount, unknown>;
-    getProductAccountSigner: (account: ProductAccount) => import("polkadot-api").PolkadotSigner;
+    getProductAccountSigner: (
+        account: ProductAccount,
+        options?: HostSignerOptions,
+    ) => import("@polkadot-api/signers-common").CommonSignerTxCreator;
     registerRingVrfKey: (
         index: number,
         ring: RingLocation,
@@ -295,11 +299,11 @@ export class HostProvider implements SignerProvider {
         log.debug("attempting Host API connection");
 
         return withRetry(
-            async () => {
+            async (attempt) => {
                 if (signal?.aborted) {
                     return err(new HostUnavailableError("Connection aborted"));
                 }
-                return this.tryConnect();
+                return this.tryConnect(attempt >= this.maxRetries - 1);
             },
             {
                 maxAttempts: this.maxRetries,
@@ -409,20 +413,24 @@ export class HostProvider implements SignerProvider {
     }
 
     /**
-     * Get a PolkadotSigner for a product account.
+     * Get a PAPI 3 transaction creator for a product account.
      *
      * Convenience method for when you already have the product account details.
      * Requires a prior successful `connect()` call.
      *
      * Signing routes through the host's `createTransaction` path, so unknown
      * signed extensions (e.g. `AsPgas` on Paseo Next) are forwarded to the host
-     * as opaque bytes for metadata-driven decoding.
+     * as opaque bytes for metadata-driven decoding. The signer picks a pipeline
+     * version that declares them, version 1 for `AsPgas` on Asset Hub runtime 3004000.
      */
-    getProductAccountSigner(account: ProductAccount): import("polkadot-api").PolkadotSigner {
+    getProductAccountSigner(
+        account: ProductAccount,
+        options?: HostSignerOptions,
+    ): import("@polkadot-api/signers-common").CommonSignerTxCreator {
         if (!this.accountsProvider) {
             throw new Error("Host provider is not connected");
         }
-        return this.accountsProvider.getProductAccountSigner(account);
+        return this.accountsProvider.getProductAccountSigner(account, options);
     }
 
     /**
@@ -661,7 +669,9 @@ export class HostProvider implements SignerProvider {
 
     // ── Private ──────────────────────────────────────────────────────
 
-    private async tryConnect(): Promise<Result<SignerAccount[], SignerError>> {
+    private async tryConnect(
+        isFinalAttempt: boolean,
+    ): Promise<Result<SignerAccount[], SignerError>> {
         // Step 1: Obtain the host accounts provider. `null` (or a thrown error)
         // means we're not inside a host container.
         let provider: AccountsProvider | null;
@@ -730,13 +740,7 @@ export class HostProvider implements SignerProvider {
                 this.productAccount.requestName ?? true,
             );
             if (!accountResult.ok) {
-                // Signed-out / non-transient: soft-degrade to read-only, matching
-                // the `dappName` branch. Returning `ok([])` (not the error) also
-                // means `connect()`'s retry loop doesn't burn attempts on a state
-                // no retry can fix. Genuine transient faults still surface as an
-                // error and get retried.
-                const error = accountResult.error;
-                if (error instanceof HostRejectedError && error.nonTransient) {
+                if (degradeOnAccountFailure(accountResult.error, isFinalAttempt)) {
                     log.warn(
                         "product account unavailable (signed out or unregistered); resolving with empty accounts",
                         { dotNsIdentifier: this.productAccount.dotNsIdentifier },
@@ -759,11 +763,9 @@ export class HostProvider implements SignerProvider {
                 true,
             );
             if (!accountResult.ok) {
-                // Soft-degrade: host couldn't derive a product account for
-                // this dappName (most commonly because the identifier isn't
-                // registered for this user). Returning [] lets `connect()`
-                // resolve successfully — consumers handle the empty list
-                // and drive explicit signing paths.
+                if (!degradeOnAccountFailure(accountResult.error, isFinalAttempt)) {
+                    return accountResult;
+                }
                 log.warn(
                     "host could not derive a product account for dappName; resolving with empty accounts",
                     {
@@ -805,7 +807,13 @@ export class HostProvider implements SignerProvider {
                     tag: "ChainSubmit",
                     value: undefined,
                 });
-                log.debug("ChainSubmit permission result", { granted });
+                if (granted) {
+                    log.debug("ChainSubmit permission granted");
+                } else {
+                    log.warn(
+                        "host denied the ChainSubmit permission; signing will fail until it is granted",
+                    );
+                }
             } catch (cause) {
                 log.warn("failed to request ChainSubmit permission", {
                     error: cause instanceof Error ? cause.message : String(cause),
@@ -901,6 +909,36 @@ const NON_TRANSIENT_HOST_TAGS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Non-transient tags that are nonetheless worth one more attempt.
+ *
+ * `NotConnected` carries two states the host does not distinguish: the user is
+ * signed out, and the session exists but is being re-established (after a host
+ * account switch, the core re-mints it, and a product account queried in that
+ * window is refused). The first is permanent, the second clears on its own in
+ * milliseconds, and both arrive as the same tag.
+ *
+ * So retry it, and only degrade to read-only once the attempts are spent.
+ * Signed-out reaches the same empty-accounts state as before, just a retry
+ * cycle later; a re-mint in flight now recovers instead of leaving the product
+ * connected with no accounts and nothing to prompt another try.
+ */
+const RETRY_BEFORE_DEGRADING_TAGS: ReadonlySet<string> = new Set(["NotConnected"]);
+
+/**
+ * Should a failed product-account fetch degrade `connect()` to read-only
+ * (`ok([])`), or be returned so the retry loop can have another go?
+ *
+ * Both `connect()` branches ask this, so `productAccount` and `dappName` stay
+ * symmetric — they did not, and the `dappName` branch degraded on any failure
+ * at all, including timeouts no retry had been given a chance to clear.
+ */
+function degradeOnAccountFailure(error: SignerError, isFinalAttempt: boolean): boolean {
+    if (!(error instanceof HostRejectedError) || !error.nonTransient) return false;
+    if (isFinalAttempt) return true;
+    return !hasHostErrorTag(error.cause, RETRY_BEFORE_DEGRADING_TAGS);
+}
+
+/**
  * Does a host error represent a non-transient, expected condition (e.g. the
  * user is signed out)? Walks the tagged-enum chain the same way
  * {@link formatError} does — the identifying tag can sit at the outer level or
@@ -908,11 +946,16 @@ const NON_TRANSIENT_HOST_TAGS: ReadonlySet<string> = new Set([
  * match anywhere in the chain counts.
  */
 function isNonTransientHostError(error: unknown): boolean {
+    return hasHostErrorTag(error, NON_TRANSIENT_HOST_TAGS);
+}
+
+/** Walk a host error's tagged-enum chain looking for any of `tags`. */
+function hasHostErrorTag(error: unknown, tags: ReadonlySet<string>): boolean {
     let node: unknown = error;
     // Bounded walk: envelopes are shallow (Domain → V1 → domain error).
     for (let depth = 0; node && typeof node === "object" && depth < 8; depth++) {
         const tag = (node as { tag?: unknown }).tag;
-        if (typeof tag === "string" && NON_TRANSIENT_HOST_TAGS.has(tag)) return true;
+        if (typeof tag === "string" && tags.has(tag)) return true;
         node = (node as { value?: unknown }).value;
     }
     return false;
@@ -938,7 +981,7 @@ function formatError(error: unknown): string {
     if (!("tag" in e)) {
         if (typeof e.reason === "string") return e.reason;
         if (typeof e.message === "string") return e.message;
-        return String(error);
+        return describeValue(error);
     }
 
     const outerTag = String(e.tag);
@@ -958,13 +1001,69 @@ function formatError(error: unknown): string {
         if ("tag" in innerObj) {
             return `${outerTag} → ${formatError(inner)}`;
         }
+        // Inner is a GenericError-shaped payload, e.g. `Unknown: { reason }`.
+        if (typeof innerObj.reason === "string") {
+            return `${outerTag} → ${innerObj.reason}`;
+        }
     }
 
-    // Inner is a primitive or absent — fall back to the outer tag alone.
+    // Inner is any other value: show it, serialized when it is an object, so a
+    // payload does not collapse to "[object Object]".
     if (inner !== undefined) {
-        return `${outerTag} (${String(inner)})`;
+        return `${outerTag} (${describeValue(inner)})`;
     }
     return outerTag;
+}
+
+/** Longest serialized payload {@link describeValue} returns before eliding the rest. */
+const MAX_DESCRIBED_CHARS = 500;
+/** Bytes of a byte array {@link describeValue} shows before giving only its length. */
+const MAX_DESCRIBED_BYTES = 64;
+
+/**
+ * A value as it reads in an error message: a primitive via `String`, an object as
+ * JSON with bigints as decimal strings, byte arrays as hex (the first
+ * {@link MAX_DESCRIBED_BYTES}, then the length) and a nested `Error` as its name,
+ * message, own fields (an RPC error's `code` or `data`) and cause. An object met
+ * a second time prints as "[repeated]", whether it is shared or a cycle, which
+ * keeps the walk linear; output past {@link MAX_DESCRIBED_CHARS} is elided.
+ */
+function describeValue(value: unknown): string {
+    if (value === null || typeof value !== "object") return String(value);
+    const seen = new WeakSet<object>();
+    let json: string | undefined;
+    try {
+        json = JSON.stringify(value, (_key, v: unknown) => {
+            if (typeof v === "bigint") return v.toString();
+            if (v instanceof Uint8Array) {
+                const shown = Array.from(v.subarray(0, MAX_DESCRIBED_BYTES), (b) =>
+                    b.toString(16).padStart(2, "0"),
+                );
+                return `0x${shown.join("")}${v.length > MAX_DESCRIBED_BYTES ? `…(${v.length} B)` : ""}`;
+            }
+            if (v === null || typeof v !== "object") return v;
+            if (seen.has(v)) return "[repeated]";
+            seen.add(v);
+            return v instanceof Error ? errorFields(v) : v;
+        });
+    } catch {
+        return String(value);
+    }
+    if (json === undefined) return String(value);
+    return json.length > MAX_DESCRIBED_CHARS ? `${json.slice(0, MAX_DESCRIBED_CHARS)}…` : json;
+}
+
+/**
+ * An `Error` as {@link describeValue} serializes it: name and message, its own
+ * enumerable fields, then cause. `JSON.stringify` alone keeps only the own
+ * enumerable fields, since `message` and `cause` are not enumerable and `name`
+ * is usually inherited.
+ */
+function errorFields(error: Error): Record<string, unknown> {
+    const fields: Record<string, unknown> = { name: error.name, message: error.message };
+    Object.assign(fields, error);
+    if (error.cause !== undefined) fields.cause = error.cause;
+    return fields;
 }
 
 if (import.meta.vitest) {
@@ -1030,7 +1129,7 @@ if (import.meta.vitest) {
         const shouldReject = options.shouldReject ?? false;
         const mockSigner = {
             publicKey: new Uint8Array(32).fill(0xbb),
-        } as unknown as import("polkadot-api").PolkadotSigner;
+        } as unknown as import("@polkadot-api/signers-common").CommonSignerTxCreator;
 
         return {
             getLegacyAccounts: vi.fn().mockReturnValue({
@@ -1268,8 +1367,9 @@ if (import.meta.vitest) {
             // Resolves read-only rather than erroring.
             expect(result.ok).toBe(true);
             if (result.ok) expect(result.value).toEqual([]);
-            // And does NOT retry a signed-out state — one attempt only.
-            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(1);
+            // Retried first: `NotConnected` is also what an in-flight session
+            // re-mint returns, and the host doesn't distinguish the two.
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(3);
         });
 
         test("connect with productAccount soft-degrades on a bare NotConnected tag too", async () => {
@@ -1288,7 +1388,45 @@ if (import.meta.vitest) {
 
             expect(result.ok).toBe(true);
             if (result.ok) expect(result.value).toEqual([]);
-            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(1);
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(3);
+        });
+
+        test("connect recovers when a re-minting session frees up mid-retry", async () => {
+            // The switch-account case: the first query lands while the core is
+            // re-minting the session, the next one succeeds. Before both
+            // branches shared a classifier this degraded to [] and stayed there.
+            const productPubkey = new Uint8Array(32).fill(0x42);
+            const mockProvider = createMockProvider({
+                accounts: [{ publicKey: productPubkey, name: undefined }],
+            });
+            let calls = 0;
+            mockProvider.getProductAccount.mockReturnValue({
+                match: async (
+                    onOk: (v: RawAccountTest) => unknown,
+                    onErr: (e: unknown) => unknown,
+                ) => {
+                    calls += 1;
+                    if (calls === 1) {
+                        return onErr({
+                            tag: "Domain",
+                            value: { tag: "V1", value: { tag: "NotConnected", value: undefined } },
+                        });
+                    }
+                    return onOk({ publicKey: productPubkey, name: undefined });
+                },
+            });
+            const provider = new HostProvider({
+                maxRetries: 3,
+                retryDelay: 0,
+                dappName: "my-cli",
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
+            });
+            const result = await provider.connect();
+
+            expect(result.ok).toBe(true);
+            if (result.ok) expect(result.value).toHaveLength(1);
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(2);
         });
 
         test("connect with productAccount surfaces + retries a transient failure", async () => {
@@ -1370,15 +1508,19 @@ if (import.meta.vitest) {
             }
         });
 
-        test("connect with dappName fallback resolves to [] when host rejects derivation", async () => {
-            // Soft-degrade: when the host can't derive a product account
-            // for the dappName (commonly because the dotNS identifier isn't
-            // registered for this user), connect() returns ok([]) rather
-            // than throwing. Consumers handle the empty list and drive
-            // explicit signing paths.
-            const mockProvider = createMockProvider({ shouldReject: true, error: "Rejected" });
+        test("connect with dappName resolves to [] when the identifier isn't registered", async () => {
+            // `DomainNotValid` is permanent — degrade to read-only at once, no
+            // retry, so consumers can drive the explicit signing paths.
+            const mockProvider = createMockProvider({
+                shouldReject: true,
+                error: {
+                    tag: "Domain",
+                    value: { tag: "V1", value: { tag: "DomainNotValid", value: undefined } },
+                },
+            });
             const provider = new HostProvider({
-                maxRetries: 1,
+                maxRetries: 3,
+                retryDelay: 0,
                 dappName: "not-registered",
                 loadAccountsProvider: loadProvider(mockProvider),
                 requestChainSubmitPermissionFn: grantPermission(),
@@ -1386,9 +1528,27 @@ if (import.meta.vitest) {
             const result = await provider.connect();
 
             expect(result.ok).toBe(true);
-            if (result.ok) {
-                expect(result.value).toEqual([]);
-            }
+            if (result.ok) expect(result.value).toEqual([]);
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(1);
+        });
+
+        test("connect with dappName surfaces + retries an unclassified rejection", async () => {
+            // The asymmetry this fixes: the dappName branch used to degrade to
+            // [] on ANY failure, so a timeout looked exactly like an
+            // unregistered identifier and connect() reported success with no
+            // accounts and nothing to prompt another try.
+            const mockProvider = createMockProvider({ shouldReject: true, error: "Rejected" });
+            const provider = new HostProvider({
+                maxRetries: 3,
+                retryDelay: 0,
+                dappName: "not-registered",
+                loadAccountsProvider: loadProvider(mockProvider),
+                requestChainSubmitPermissionFn: grantPermission(),
+            });
+            const result = await provider.connect();
+
+            expect(result.ok).toBe(false);
+            expect(mockProvider.getProductAccount).toHaveBeenCalledTimes(3);
         });
 
         test("connect resolves to [] when neither productAccount nor dappName is set", async () => {
@@ -1409,10 +1569,6 @@ if (import.meta.vitest) {
         });
 
         test("getProductAccountSigner delegates to the host accounts provider", async () => {
-            // The host accounts provider's getProductAccountSigner has a single
-            // signing path (the host's `createTransaction`, which forwards opaque
-            // signed extensions like AsPgas on Paseo Next). There is no PJS
-            // fallback to select, so it's called with just the account.
             const rawAccounts: RawAccountTest[] = [
                 { publicKey: new Uint8Array(32).fill(0xaa), name: "Alice" },
             ];
@@ -1425,14 +1581,15 @@ if (import.meta.vitest) {
             await provider.connect();
 
             // Path 1: HostProvider.getProductAccountSigner(...)
-            provider.getProductAccountSigner({
+            const account = {
                 dotNsIdentifier: "test.dot",
                 derivationIndex: 0,
                 publicKey: rawAccounts[0].publicKey,
+            };
+            provider.getProductAccountSigner(account, { txExtVersion: 1 });
+            expect(mockProvider.getProductAccountSigner).toHaveBeenLastCalledWith(account, {
+                txExtVersion: 1,
             });
-            expect(mockProvider.getProductAccountSigner).toHaveBeenLastCalledWith(
-                expect.anything(),
-            );
 
             // Path 2: getSigner() returned from HostProvider.getProductAccount(...)
             const productAccountResult = await provider.getProductAccount("test.dot", 0);
@@ -1989,6 +2146,33 @@ if (import.meta.vitest) {
             const result = await providerWithPermission(requestFn).connect();
             expect(result.ok).toBe(true);
         });
+
+        test("a denial is logged at warn, not swallowed at debug", async () => {
+            const { configure: configureLogs } = await import("@parity/product-sdk-logger");
+            const warnings: string[] = [];
+            // No `level` override — `warn` is the default, and `configure()` merges,
+            // so any override would be irreversible from outside the logger package.
+            // For the same reason the `finally` installs a noop handler rather than
+            // restoring the previous one: there is no way to clear it, so every later
+            // emission in this file goes to the noop. Assumes `PRODUCT_SDK_LOG` unset.
+            configureLogs({
+                handler: (entry) => {
+                    if (entry.level === "warn") warnings.push(entry.message);
+                },
+            });
+
+            try {
+                const requestFn = vi
+                    .fn<(permission: RemotePermission) => Promise<boolean>>()
+                    .mockResolvedValue(false);
+                const result = await providerWithPermission(requestFn).connect();
+
+                expect(result.ok).toBe(true);
+                expect(warnings.some((w) => w.includes("denied the ChainSubmit"))).toBe(true);
+            } finally {
+                configureLogs({ handler: () => {} });
+            }
+        });
     });
 
     describe("formatError", () => {
@@ -2049,6 +2233,75 @@ if (import.meta.vitest) {
 
         test("formats a primitive inner value alongside the tag", () => {
             expect(formatError({ tag: "v1", value: "code-42" })).toBe("v1 (code-42)");
+        });
+
+        test("serializes an object payload instead of printing [object Object]", () => {
+            // The nesting of a product-account rejection that logged as
+            // "Domain → V1 → Unknown ([object Object])"; the payload itself is illustrative.
+            const wrapped = {
+                tag: "Domain",
+                value: { tag: "V1", value: { tag: "Unknown", value: { code: 7, detail: "x" } } },
+            };
+            expect(formatError(wrapped)).toBe('Domain → V1 → Unknown ({"code":7,"detail":"x"})');
+        });
+
+        test("surfaces a reason payload under a tag", () => {
+            const wrapped = {
+                tag: "V1",
+                value: { tag: "Unknown", value: { reason: "no account" } },
+            };
+            expect(formatError(wrapped)).toBe("V1 → Unknown → no account");
+        });
+
+        test("serializes a tagless object without reason or message", () => {
+            expect(formatError({ code: 3 })).toBe('{"code":3}');
+        });
+
+        test("renders bigints and bytes in a payload, and cuts cycles", () => {
+            const payload: Record<string, unknown> = { n: 1n, b: new Uint8Array([1, 2]) };
+            payload.self = payload;
+            expect(formatError({ tag: "v1", value: payload })).toBe(
+                'v1 ({"n":"1","b":"0x0102","self":"[repeated]"})',
+            );
+        });
+
+        test("prints a shared object once, then as repeated", () => {
+            const shared = { k: 1 };
+            expect(formatError({ tag: "v1", value: { a: shared, b: shared } })).toBe(
+                'v1 ({"a":{"k":1},"b":"[repeated]"})',
+            );
+        });
+
+        test("elides a long payload", () => {
+            const out = formatError({ tag: "v1", value: { s: "a".repeat(2000) } });
+            expect(out).toBe(`v1 ({"s":"${"a".repeat(494)}…)`);
+        });
+
+        test("shows only the head of a long byte array, so later fields survive", () => {
+            const bytes = new Uint8Array(1000).fill(0xab);
+            const out = formatError({ tag: "v1", value: { blob: bytes, reason_code: 9 } });
+            expect(out).toBe(`v1 ({"blob":"0x${"ab".repeat(64)}…(1000 B)","reason_code":9})`);
+        });
+
+        test("keeps the message of an Error nested in a payload", () => {
+            const payload = {
+                stage: "derive",
+                cause: new Error("no root key", { cause: { code: 3 } }),
+            };
+            expect(formatError({ tag: "v1", value: payload })).toBe(
+                'v1 ({"stage":"derive","cause":{"name":"Error","message":"no root key","cause":{"code":3}}})',
+            );
+        });
+
+        test("keeps the own fields of an Error nested in a payload, ahead of its cause", () => {
+            // Cause last: a long one would otherwise push `code` past the cut.
+            const rpcError = Object.assign(new Error("rate limited", { cause: { retry: true } }), {
+                code: -32005,
+                data: { retryAfter: 2 },
+            });
+            expect(formatError({ tag: "v1", value: { error: rpcError } })).toBe(
+                'v1 ({"error":{"name":"Error","message":"rate limited","code":-32005,"data":{"retryAfter":2},"cause":{"retry":true}}})',
+            );
         });
     });
 

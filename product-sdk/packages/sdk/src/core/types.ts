@@ -25,8 +25,8 @@ export interface CloudStorageConfig {
 
 /** Configuration for createApp */
 export interface AppConfig {
-    /** Application name - used to derive product accounts and namespace storage */
-    name: string;
+    /** @deprecated Ignored with a warning. The host product ID supplies the app name. */
+    name?: string;
     /** Log level for SDK operations (default: 'info') */
     logLevel?: LogLevel;
     /**
@@ -35,6 +35,12 @@ export interface AppConfig {
      * - Pass `false` to disable cloud storage initialization
      */
     cloudStorage?: CloudStorageConfig | false;
+}
+
+/** App configuration with the identity resolved from the host. */
+export interface AppInfo extends Omit<AppConfig, "name"> {
+    /** App name and storage prefix, omitting the host ID's final domain suffix. Local host IDs stay unchanged. */
+    name: string;
 }
 
 /** Wallet API exposed by the SDK */
@@ -64,11 +70,23 @@ export interface WalletApi {
     ): Promise<DotNsIdentitySignature>;
     /** Subscribe to account changes */
     onAccountChange(callback: (account: Account | null) => void): () => void;
-    /** Get product-scoped account (container mode only) */
+    /**
+     * Get product-scoped account (container mode only).
+     * @deprecated This sync stub always returns `null`; product accounts need an
+     *   async call. Use `SignerManager.getProductAccount()` directly.
+     */
     getProductAccount(): Account | null;
-    /** Get anonymous alias via Ring VRF (container mode only) */
+    /**
+     * Get anonymous alias via Ring VRF (container mode only).
+     * @deprecated This sync stub always returns `null`. Use
+     *   `SignerManager.getProductAccountAlias()` directly.
+     */
     getAnonymousAlias(): string | null;
-    /** Create Ring VRF proof (container mode only) */
+    /**
+     * Create Ring VRF proof (container mode only).
+     * @deprecated Not implemented on the App API (throws). Use
+     *   `SignerManager.createRingVRFProof()` directly.
+     */
     createProof(message: Uint8Array): Promise<Uint8Array>;
 }
 
@@ -176,8 +194,8 @@ export interface App {
     chain: ChainApi;
     /** Cloud Storage operations (null if disabled via config) */
     cloudStorage: CloudStorageApi | null;
-    /** Get app configuration */
-    getAppInfo(): AppConfig;
+    /** Get app configuration with the host-derived name. */
+    getAppInfo(): AppInfo;
 }
 
 /** Account information */

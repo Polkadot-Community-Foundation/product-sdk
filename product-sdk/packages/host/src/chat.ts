@@ -9,17 +9,22 @@
  * @module
  */
 
+import { okAsync } from "neverthrow";
+
 import type {
     ChatBotRegistrationStatus,
     ChatRoomRegistrationStatus,
     HostChatActionSubscribeItem,
     HostChatCreateRoomRequest,
     HostChatRegisterBotRequest,
+    HostRendererActionSubscribeItem,
+    RendererNode,
     TrUApiClient,
 } from "@parity/truapi";
 
 import { getClient, subscribeWithInterrupt } from "./transport.js";
-import { unwrapHostResult } from "./truapi.js";
+import { type RenderHandler, registerRenderContext, renderFailure } from "./renderer.js";
+import { fromHex, unwrapHostResult } from "./truapi.js";
 import type { HostSubscription } from "./types.js";
 
 /** Chat message payload variants and room metadata. Re-exported from `@parity/truapi`. */
@@ -35,6 +40,42 @@ export type ChatRoomRegistrationResult = ChatRoomRegistrationStatus;
 /** Result of registering a bot (`"New" | "Exists"`). Re-exported from `@parity/truapi`. */
 export type ChatBotRegistrationResult = ChatBotRegistrationStatus;
 
+/** Request delivered when the host needs a native tree for a stored custom message. */
+export interface ChatCustomMessageRenderingRequest {
+    messageId: string;
+    messageType: string;
+    payload: Uint8Array;
+    subscribeActions(
+        callback: (actionId: string, payload: Uint8Array | undefined) => void,
+    ): VoidFunction;
+}
+
+/** Minimal push source: what a rendering request handler returns. */
+export interface ObservableSource<Item> {
+    subscribe(observer: { next?(value: Item): void; error?(error: unknown): void }): {
+        unsubscribe(): void;
+    };
+}
+
+/** Product callback that streams native renderer trees for one custom message. */
+export type ChatCustomMessageRenderingRequestHandler = (
+    request: ChatCustomMessageRenderingRequest,
+) => ObservableSource<RendererNode>;
+
+/** Registration returned by the custom-message renderer channel. */
+export interface ChatCustomMessageRenderingRegistration {
+    unsubscribe(): void;
+}
+
+/** Options for {@link ChatManager.sendMessage}. */
+export interface ChatSendMessageOptions {
+    /**
+     * One line describing the message, which a host shows where it lists the
+     * message rather than draws it, such as a chat list preview of a custom card.
+     */
+    alt?: string;
+}
+
 /**
  * Chat manager handle. Exposes room/bot registration, message sending, and
  * subscription to the room list and incoming actions.
@@ -42,9 +83,23 @@ export type ChatBotRegistrationResult = ChatBotRegistrationStatus;
 export interface ChatManager {
     registerRoom(request: HostChatCreateRoomRequest): Promise<ChatRoomRegistrationResult>;
     registerBot(request: HostChatRegisterBotRequest): Promise<ChatBotRegistrationResult>;
-    sendMessage(roomId: string, payload: ChatMessageContent): Promise<{ messageId: string }>;
+    sendMessage(
+        roomId: string,
+        payload: ChatMessageContent,
+        options?: ChatSendMessageOptions,
+    ): Promise<{ messageId: string }>;
     subscribeChatList(callback: (rooms: ChatRoom[]) => void): HostSubscription;
     subscribeAction(callback: (action: ChatReceivedAction) => void): HostSubscription;
+    onCustomMessageRenderingRequest(
+        handler: ChatCustomMessageRenderingRequestHandler,
+    ): ChatCustomMessageRenderingRegistration;
+}
+
+type RendererActionListener = (actionId: string, payload: Uint8Array | undefined) => void;
+
+interface ActionListener {
+    next(action: ChatReceivedAction): void;
+    interrupt?: (reason?: unknown) => void;
 }
 
 /** Build a {@link ChatManager} over a TruAPI client's `chat` domain. */
@@ -53,6 +108,75 @@ function adaptChatManager(client: TrUApiClient): ChatManager {
     // Cache registration status by id so repeat calls don't re-prompt the host.
     const roomStatus = new Map<string, ChatRoomRegistrationResult>();
     const botStatus = new Map<string, ChatBotRegistrationResult>();
+    const actionListeners = new Set<ActionListener>();
+    const rendererActionListeners = new Map<string, Set<RendererActionListener>>();
+    let actionSubscription: HostSubscription | undefined;
+    let rendererActionSubscription: HostSubscription | undefined;
+
+    const stopActionsIfUnused = () => {
+        if (actionListeners.size > 0) return;
+        actionSubscription?.unsubscribe();
+        actionSubscription = undefined;
+    };
+
+    const ensureActionSubscription = () => {
+        if (actionSubscription) return;
+
+        actionSubscription = subscribeWithInterrupt(chat.actionSubscribe(), (action) => {
+            for (const listener of actionListeners) listener.next(action);
+        });
+        actionSubscription.onInterrupt((reason) => {
+            actionSubscription = undefined;
+            for (const listener of actionListeners) listener.interrupt?.(reason);
+        });
+    };
+
+    const stopRendererActionsIfUnused = () => {
+        if (rendererActionListeners.size > 0) return;
+        rendererActionSubscription?.unsubscribe();
+        rendererActionSubscription = undefined;
+    };
+
+    const ensureRendererActionSubscription = () => {
+        if (rendererActionSubscription) return;
+
+        rendererActionSubscription = subscribeWithInterrupt(
+            client.renderer.actionSubscribe(),
+            ({ context, actionId, payload }) => {
+                if (context.tag !== "ChatMessage") return;
+                // A button press carries an empty payload.
+                const decodedPayload = payload === "0x" ? undefined : fromHex(payload);
+                for (const listener of rendererActionListeners.get(context.value.messageId) ?? []) {
+                    listener(actionId, decodedPayload);
+                }
+            },
+        );
+        rendererActionSubscription.onInterrupt(() => {
+            rendererActionSubscription = undefined;
+        });
+    };
+
+    const disposeRendererActions = () => {
+        rendererActionListeners.clear();
+        stopRendererActionsIfUnused();
+    };
+
+    const subscribeRendererActions = (
+        messageId: string,
+        callback: RendererActionListener,
+    ): VoidFunction => {
+        const listeners =
+            rendererActionListeners.get(messageId) ?? new Set<RendererActionListener>();
+        listeners.add(callback);
+        rendererActionListeners.set(messageId, listeners);
+        ensureRendererActionSubscription();
+
+        return () => {
+            listeners.delete(callback);
+            if (listeners.size === 0) rendererActionListeners.delete(messageId);
+            stopRendererActionsIfUnused();
+        };
+    };
 
     return {
         async registerRoom(request) {
@@ -75,9 +199,9 @@ function adaptChatManager(client: TrUApiClient): ChatManager {
             botStatus.set(request.botId, response.status);
             return response.status;
         },
-        async sendMessage(roomId, payload) {
+        async sendMessage(roomId, payload, options) {
             const response = await unwrapHostResult(
-                chat.postMessage({ roomId, payload }),
+                chat.postMessage({ roomId, payload, alt: options?.alt }),
                 "chat sendMessage failed",
             );
             return { messageId: response.messageId };
@@ -86,7 +210,58 @@ function adaptChatManager(client: TrUApiClient): ChatManager {
             return subscribeWithInterrupt(chat.listSubscribe(), (item) => callback(item.rooms));
         },
         subscribeAction(callback) {
-            return subscribeWithInterrupt(chat.actionSubscribe(), callback);
+            const listener: ActionListener = { next: callback };
+            let active = true;
+            actionListeners.add(listener);
+            ensureActionSubscription();
+
+            return {
+                unsubscribe() {
+                    if (!active) return;
+                    active = false;
+                    actionListeners.delete(listener);
+                    stopActionsIfUnused();
+                },
+                onInterrupt(interrupt) {
+                    listener.interrupt = interrupt;
+                    return () => {
+                        if (listener.interrupt === interrupt) listener.interrupt = undefined;
+                    };
+                },
+            };
+        },
+        onCustomMessageRenderingRequest(handler) {
+            const registration = registerRenderContext(
+                client,
+                "ChatMessage",
+                ({ context, payload }, send, interrupt) => {
+                    if (context.tag !== "ChatMessage") return;
+                    const { messageId, messageType } = context.value;
+                    const subscription = handler({
+                        messageId,
+                        messageType,
+                        payload: fromHex(payload),
+                        subscribeActions: (callback) =>
+                            subscribeRendererActions(messageId, callback),
+                    }).subscribe({
+                        next: send,
+                        error: (error) =>
+                            interrupt(
+                                renderFailure(
+                                    error instanceof Error ? error.message : String(error),
+                                ),
+                            ),
+                    });
+                    return () => subscription.unsubscribe();
+                },
+            );
+
+            return {
+                unsubscribe() {
+                    registration.unsubscribe();
+                    disposeRendererActions();
+                },
+            };
         },
     };
 }
@@ -110,13 +285,137 @@ function adaptChatManager(client: TrUApiClient): ChatManager {
  */
 export async function getChatManager(): Promise<ChatManager | null> {
     const client = await getClient();
-    return client ? adaptChatManager(client) : null;
+    if (client) return adaptChatManager(client);
+    return null;
 }
 
 if (import.meta.vitest) {
-    const { test, expect } = import.meta.vitest;
+    const { test, expect, vi } = import.meta.vitest;
 
     test("getChatManager returns null outside a container", async () => {
         expect(await getChatManager()).toBeNull();
+    });
+
+    test("sendMessage passes the alt to the host", async () => {
+        const postMessage = vi.fn(() => okAsync({ messageId: "message-1" }));
+        const manager = adaptChatManager({ chat: { postMessage } } as unknown as TrUApiClient);
+        const payload: ChatMessageContent = {
+            tag: "Custom",
+            value: { messageType: "results", payload: "0x01" },
+        };
+
+        await manager.sendMessage("room-1", payload, { alt: "Week 12 results" });
+
+        expect(postMessage).toHaveBeenCalledWith({
+            roomId: "room-1",
+            payload,
+            alt: "Week 12 results",
+        });
+    });
+
+    test("sendMessage without options passes no alt to the host", async () => {
+        const postMessage = vi.fn(() => okAsync({ messageId: "message-1" }));
+        const manager = adaptChatManager({ chat: { postMessage } } as unknown as TrUApiClient);
+        const payload: ChatMessageContent = { tag: "Text", value: { text: "hi" } };
+
+        await manager.sendMessage("room-1", payload);
+
+        expect(postMessage).toHaveBeenCalledWith({ roomId: "room-1", payload, alt: undefined });
+    });
+
+    test("custom renderer requests decode payloads and receive message-scoped actions", () => {
+        let renderHandler: RenderHandler | undefined;
+        let actionObserver: ((action: HostChatActionSubscribeItem) => void) | undefined;
+        let rendererActionObserver: ((action: HostRendererActionSubscribeItem) => void) | undefined;
+        const stopActions = vi.fn();
+        const stopRendererActions = vi.fn();
+        const actionSubscribe = vi.fn(() => ({
+            subscribe(observer: { next?(action: HostChatActionSubscribeItem): void }) {
+                actionObserver = observer.next;
+                return {
+                    subscriptionId: "action-subscription",
+                    unsubscribe: stopActions,
+                };
+            },
+            [Symbol.observable]() {
+                return this;
+            },
+        }));
+        const rendererActionSubscribe = vi.fn(() => ({
+            subscribe(observer: { next?(action: HostRendererActionSubscribeItem): void }) {
+                rendererActionObserver = observer.next;
+                return {
+                    subscriptionId: "renderer-action-subscription",
+                    unsubscribe: stopRendererActions,
+                };
+            },
+            [Symbol.observable]() {
+                return this;
+            },
+        }));
+        const client = {
+            chat: { actionSubscribe },
+            renderer: {
+                onRender(handler: RenderHandler) {
+                    renderHandler = handler;
+                    return { unsubscribe: () => undefined };
+                },
+                actionSubscribe: rendererActionSubscribe,
+            },
+        } as unknown as TrUApiClient;
+        const manager = adaptChatManager(client);
+        const receivedMessages: HostChatActionSubscribeItem[] = [];
+        const receivedActions: Array<[string, Uint8Array | undefined]> = [];
+        const messageSubscription = manager.subscribeAction((action) => {
+            receivedMessages.push(action);
+        });
+
+        const registration = manager.onCustomMessageRenderingRequest((request) => {
+            expect(request.payload).toEqual(Uint8Array.of(1, 2));
+            request.subscribeActions((actionId, payload) => {
+                receivedActions.push([actionId, payload]);
+            });
+            return {
+                subscribe: () => ({ unsubscribe: () => undefined }),
+            };
+        });
+        const context = {
+            tag: "ChatMessage" as const,
+            value: { roomId: "room-1", messageId: "message-1", messageType: "result" },
+        };
+        renderHandler?.({ context, payload: "0x0102" }, vi.fn(), vi.fn());
+        const postedAction: HostChatActionSubscribeItem = {
+            roomId: "room-1",
+            peer: "peer-1",
+            payload: {
+                tag: "MessagePosted",
+                value: { tag: "Text", value: { text: "!flip" } },
+            },
+        };
+        actionObserver?.(postedAction);
+        actionObserver?.({
+            roomId: "room-1",
+            peer: "peer-1",
+            payload: {
+                tag: "ActionTriggered",
+                value: {
+                    messageId: "message-1",
+                    actionId: "host-drawn",
+                    payload: "0x03",
+                },
+            },
+        });
+        rendererActionObserver?.({ context, actionId: "flip-again", payload: "0x03" });
+
+        expect(actionSubscribe).toHaveBeenCalledOnce();
+        expect(rendererActionSubscribe).toHaveBeenCalledOnce();
+        expect(receivedMessages).toHaveLength(2);
+        expect(receivedMessages[0]).toEqual(postedAction);
+        expect(receivedActions).toEqual([["flip-again", Uint8Array.of(3)]]);
+        registration.unsubscribe();
+        expect(stopRendererActions).toHaveBeenCalledOnce();
+        expect(stopActions).not.toHaveBeenCalled();
+        messageSubscription.unsubscribe();
+        expect(stopActions).toHaveBeenCalledOnce();
     });
 }

@@ -71,6 +71,7 @@ export {
     HostUnavailableError,
     HostCallFailedError,
     HostResponseDecodeError,
+    HostTimeoutError,
     isHostError,
     formatHostError,
 } from "./errors.js";
@@ -78,11 +79,14 @@ export type { HostErrorPayload } from "./errors.js";
 
 // Accounts — host wallet accounts, product accounts, Ring VRF, and signers.
 export { getAccountsProvider, findRingVrfKeyHandle } from "./accounts.js";
+export { createHostTxCreator } from "./tx-creator.js";
+export type { HostTxExtension, HostTxRequest } from "./tx-creator.js";
 export type {
     AccountsProvider,
     WithDecodeError,
     DerivationIndex,
     HostAccount,
+    HostSignerOptions,
     ProductAccount,
     ProductAccountLookup,
     ContextualAlias,
@@ -121,7 +125,33 @@ export type {
     ChatRoom,
     ChatRoomRegistrationResult,
     ChatBotRegistrationResult,
+    ChatCustomMessageRenderingRequest,
+    ChatCustomMessageRenderingRequestHandler,
+    ChatCustomMessageRenderingRegistration,
+    ChatSendMessageOptions,
 } from "./chat.js";
+
+// Renderer (the shared `onRender` slot)
+export { getRendererManager, registerRenderContext, renderFailure } from "./renderer.js";
+export type {
+    RenderCleanup,
+    RenderContextTag,
+    RendererManager,
+    RenderFailure,
+    RenderHandler,
+    RenderRegistration,
+} from "./renderer.js";
+
+// Pocket
+export { getPocketManager } from "./pocket.js";
+export type {
+    CardCleanup,
+    CardDrawHandler,
+    CardDrawRegistration,
+    PocketCard,
+    PocketCardAction,
+    PocketManager,
+} from "./pocket.js";
 
 // Payments (RFC-0006)
 export { getPaymentManager } from "./payments.js";
