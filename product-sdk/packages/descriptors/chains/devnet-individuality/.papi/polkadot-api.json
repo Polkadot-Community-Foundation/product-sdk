@@ -6,7 +6,7 @@
             "wsUrl": "wss://people-paseo.rotko.net",
             "metadata": "../../.papi/metadata/devnet_individuality.scale",
             "genesis": "0xe6c30d6e148f250b887105237bcaa5cb9f16dd203bf7b5b9d4f1da7387cb86ec",
-            "codeHash": "0xd0f3191c63f51decc9eaa0cb61be5e84dcda532e0934e827d382183458ac36df"
+            "codeHash": "0x35364c0ac81591deb3c5fd02813a077464cd362d3a0ca22d5f79c8cc8773387d"
         }
     }
 }

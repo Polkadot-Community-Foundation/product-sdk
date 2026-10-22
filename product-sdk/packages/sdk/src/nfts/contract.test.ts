@@ -20,9 +20,9 @@
  * protocol level. Whether PAPI's *typing* admits the one-arg `getEntries` that
  * `NftsChain` asks for is a different question, and this is what answers it.
  *
- * **Paseo only, and that asymmetry is the point.** `devnet-asset-hub` carries
- * neither `Scarcity` nor `NftClaims`, so the negative control below is not a
- * hypothetical: it is the live state of the other supported network.
+ * Paseo and devnet both carry `Scarcity` and `NftClaims` (devnet since its
+ * re-pin on spec 2005004). Polkadot Asset Hub carries neither, so the negative
+ * control below is not a hypothetical: it is the live state of that network.
  */
 import type { getChainAPI } from "@parity/product-sdk-chain-client";
 import type { NftsChain, NftsCreditsChain, NftsInstancesChain } from "@parity/product-sdk-nfts";
@@ -34,6 +34,7 @@ type Assert<T extends true> = T;
 
 type PaseoClient = Awaited<ReturnType<typeof getChainAPI<"paseo">>>;
 type DevnetClient = Awaited<ReturnType<typeof getChainAPI<"devnet">>>;
+type PolkadotClient = Awaited<ReturnType<typeof getChainAPI<"polkadot">>>;
 
 // The test: this alias fails to typecheck if the contract drifts from the
 // descriptor, so it needs no export and no runtime reference.
@@ -49,19 +50,24 @@ type PaseoSatisfiesCredits = Assert<PaseoClient extends NftsCreditsChain ? true 
 // generated from the pinned runtime.
 type PaseoSatisfiesInstances = Assert<PaseoClient extends NftsInstancesChain ? true : false>;
 
+// Devnet carries the same pallets and runtime API, so it satisfies all three.
+type DevnetSatisfiesContract = Assert<DevnetClient extends NftsChain ? true : false>;
+type DevnetSatisfiesCredits = Assert<DevnetClient extends NftsCreditsChain ? true : false>;
+type DevnetSatisfiesInstances = Assert<DevnetClient extends NftsInstancesChain ? true : false>;
+
 // The negative control, and a real fact about the network rather than a
-// hypothetical: devnet Asset Hub has no `Scarcity` and no `NftClaims`. If
+// hypothetical: Polkadot Asset Hub has no `Scarcity` and no `NftClaims`. If
 // `NftsChain` ever stopped constraining, this `@ts-expect-error` would report
 // as unused and the file would fail.
-// @ts-expect-error devnet Asset Hub carries neither pallet
-type DevnetLacksPallets = Assert<DevnetClient extends NftsChain ? true : false>;
+// @ts-expect-error Polkadot Asset Hub carries neither pallet
+type PolkadotLacksPallets = Assert<PolkadotClient extends NftsChain ? true : false>;
 
 // No `Scarcity` pallet also means no `ScarcityApi`, so the instances contract
-// must refuse the devnet client the same way.
-// @ts-expect-error devnet Asset Hub has no ScarcityApi runtime API
-type DevnetLacksScarcityApi = Assert<DevnetClient extends NftsInstancesChain ? true : false>;
+// must refuse the Polkadot client the same way.
+// @ts-expect-error Polkadot Asset Hub has no ScarcityApi runtime API
+type PolkadotLacksScarcityApi = Assert<PolkadotClient extends NftsInstancesChain ? true : false>;
 
-test("nfts chain contract holds against the paseo descriptor", () => {
+test("nfts chain contract holds against the paseo and devnet descriptors", () => {
     // The assertions above are compile-time. This keeps vitest from reporting
     // the file as having no tests, and documents that a green run means tsc
     // accepted them.
