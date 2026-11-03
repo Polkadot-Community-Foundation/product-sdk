@@ -6,7 +6,7 @@
             "chain": "polkadot_asset_hub",
             "metadata": "../../.papi/metadata/polkadot_asset_hub.scale",
             "genesis": "0x68d56f15f85d3136970ec16946040bc1752654e906147f7e43e9d539d7c3de2f",
-            "codeHash": "0x5d7c1c7dcb717543f074dc726622aafaeaafbbec91f5b79a43e5ed8ac15c35d1"
+            "codeHash": "0xd9f622db40b8d4ef54d66223634c3546d2eec77e52d7bf4a3137a86a31589404"
         }
     }
 }
