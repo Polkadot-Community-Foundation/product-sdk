@@ -6,7 +6,7 @@
             "chain": "kusama_asset_hub",
             "metadata": "../../.papi/metadata/kusama_asset_hub.scale",
             "genesis": "0x48239ef607d7928874027a43a67689209727dfb3d3dc5e5b03a39bdc2eda771a",
-            "codeHash": "0x929a5d7409e583c593420b33be6cd3e2e7fe27229bb9accee38864452d2d6f03"
+            "codeHash": "0xf760c1f229bfa2d985d193df40fd5124df5a6a59b947292f7da2f1f9199684ba"
         }
     }
 }
