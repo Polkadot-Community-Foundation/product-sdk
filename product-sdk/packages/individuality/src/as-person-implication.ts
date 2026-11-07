@@ -283,16 +283,15 @@ if (import.meta.vitest) {
                 AS_PERSON,
             );
 
-            // Paseo's encoding pipeline is version 1 of runtime 3004000, which
-            // gained CheckMetadataHash; the devnet declares 23 in version 0.
+            // Both chains encode with pipeline version 1, 23 extensions each.
             expect(PASEO.extensions).toHaveLength(23);
             expect(DEVNET.extensions).toHaveLength(23);
             // 20 slots after AsPerson on each chain, each contributing two bytes.
             expect(onPaseo).toHaveLength(1 + CALL_DATA.length + 20 * 2);
             expect(onDevnet).toHaveLength(1 + CALL_DATA.length + 20 * 2);
-            // The version byte is the pipeline's, so the two chains differ there.
+            // The version byte is the pipeline's.
             expect(onPaseo[0]).toBe(1);
-            expect(onDevnet[0]).toBe(0);
+            expect(onDevnet[0]).toBe(1);
         });
 
         test("builds the implication for any origin-modifying extension", () => {
