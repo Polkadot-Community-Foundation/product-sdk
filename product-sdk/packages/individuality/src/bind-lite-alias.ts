@@ -691,12 +691,10 @@ if (import.meta.vitest) {
             }
         });
 
-        test("builds on devnet with extension version 0", async () => {
-            // Devnet carries PeopleLiteAuth in its only pipeline, version 0, with
-            // the same 23 extensions previewnet declares as version 1. The extras
-            // and the length are the same; only the version byte differs.
+        test("builds on devnet with extension version 1", async () => {
+            // Devnet declares the same 23 extensions previewnet does, as version 1.
             const { transaction } = await build(fakeChain(DEVNET).chain);
-            expect(hex(transaction)).toBe(`0x09014500${EXPECTED_EXTRAS}${hex(CALL_DATA).slice(2)}`);
+            expect(hex(transaction)).toBe(`0x09014501${EXPECTED_EXTRAS}${hex(CALL_DATA).slice(2)}`);
         });
 
         test("aborting while the proof is in flight throws instead of encoding", async () => {

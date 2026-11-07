@@ -581,7 +581,9 @@ type FromPapiSatisfiesRegistrationContract = Assert<
         ? true
         : false
 >;
-type DevnetPredatesRegistration = Assert<DevnetClient extends GameRegistrationChain ? false : true>;
+type DevnetSatisfiesRegistrationContract = Assert<
+    DevnetClient extends GameRegistrationChain ? true : false
+>;
 type RejectsBogusRegistrationClient = Assert<
     ClientWithoutIndividuality extends GameRegistrationChain ? false : true
 >;

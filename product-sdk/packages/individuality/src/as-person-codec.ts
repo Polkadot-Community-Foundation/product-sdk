@@ -392,10 +392,10 @@ if (import.meta.vitest) {
 
     describe("readExtensionPipeline", () => {
         test("reads the highest declared pipeline version, the one the hosts encode", () => {
-            // Runtime 3004000 declares 0 (the plain pipeline a signed V4 rides)
-            // and 1 (the origin extensions); the devnet still declares only 0.
+            // Both runtimes declare 0 (the plain pipeline a signed V4 rides)
+            // and 1 (the origin extensions).
             expect(readExtensionPipeline(PASEO).version).toBe(1);
-            expect(readExtensionPipeline(DEVNET).version).toBe(0);
+            expect(readExtensionPipeline(DEVNET).version).toBe(1);
         });
 
         test("the lower version on paseo carries no origin extension at all", () => {
